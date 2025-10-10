@@ -1,62 +1,76 @@
 # Контракты {#contracts}
 
+- [Введение](#introduction)
+- [Зачем использовать контракты](#when-to-use-contracts)
+- [Сравнение с фасадами](#contracts-vs-facades)
+- [Список основных контрактов](#contract-reference)
+- [Как реализованы контракты](#how-contracts-work)
+- [Контракты и тестирование](#contracts-and-testing)
+
 ## Введение {#introduction}
 
-В Laravel термин **«контракты»** обозначает набор PHP‑интерфейсов, определяющих основные службы фреймворка. Например, интерфейс `Illuminate\Contracts\Queue\Queue` описывает методы, необходимые для постановки заданий в очередь, а `Illuminate\Contracts\Mail\Mailer` определяет API для отправки электронных писем. Для каждого контракта Laravel поставляет соответствующую реализацию; реализация очереди поддерживает несколько драйверов, а реализация почтовой службы основана на Symfony Mailer. Все контракты находятся в отдельном репозитории `illuminate/contracts`, что позволяет использовать их независимо от ядра фреймворка и упрощает разработку пакетов, интегрирующихся с Laravel.
+Контракты Laravel — это набор интерфейсов, определяющих основные службы фреймворка: очередь, кеш, маршрутизация, события,
+посредники, запросы и многое другое. Они находятся в пакете `illuminate/contracts` и могут использоваться независимо от
+ядра Laravel.
 
-### Контракты и фасады {#contracts-vs-facades}
+## Зачем использовать контракты {#when-to-use-contracts}
 
-Фасады и вспомогательные функции предоставляют простой способ доступа к службам Laravel без явного внедрения зависимостей. Как правило, для каждого фасада существует соответствующий контракт. Главное отличие состоит в том, что фасады скрывают зависимость, а контракты позволяют явно объявлять необходимые зависимости через сигнатуру класса. Некоторые разработчики предпочитают явное объявление зависимостей и используют контракты, другие выбирают удобство фасадов. Оба подхода допустимы, и их можно комбинировать в одном приложении.
+Контракты описывают, какие методы должны быть реализованы сервисом. Они предоставляют стабильный API и упрощают подмену
+реализаций. Используйте контракты, когда:
 
-## Когда использовать контракты {#when-to-use-contracts}
+- вы создаёте пакет, который должен работать вне Laravel;
+- необходимо явно объявить зависимости класса для упрощения тестирования;
+- вы хотите воспользоваться преимуществами инверсии зависимостей.
 
-Выбор между контрактами и фасадами зависит от личных предпочтений разработчика или команды. Эти подходы не исключают друг друга: вы можете использовать фасады в одних частях приложения и контракты — в других. В большинстве случаев использование фасадов упрощает разработку. Однако если вы создаёте пакет, который должен работать в нескольких PHP‑фреймворках, имеет смысл зависеть от пакета `illuminate/contracts`, а не от конкретных реализаций Laravel. Это позволит использовать ваши классы независимо от полного стека Laravel.
+## Сравнение с фасадами {#contracts-vs-facades}
 
-## Как использовать контракты {#how-to-use-contracts}
+Фасады предоставляют удобный статический синтаксис, тогда как контракты — явную зависимость через сигнатуру конструктора или
+метода. Оба подхода могут использоваться одновременно. Фасады быстрее в использовании, но контракты делают зависимости
+явными и упрощают замену реализации в тестах или альтернативных окружениях.
 
-Получить реализацию контракта очень просто: многие классы в Laravel (контроллеры, слушатели событий, middleware, задания очереди и даже анонимные функции маршрутов) создаются через контейнер служб. Поэтому достаточно «затипизировать» интерфейс в конструкторе класса, и контейнер автоматически внедрит подходящую реализацию. Рассмотрим пример слушателя события, которому необходим доступ к Redis:
+## Список основных контрактов {#contract-reference}
+
+Некоторые часто используемые контракты:
+
+- `Illuminate\Contracts\Auth\Authenticatable`
+- `Illuminate\Contracts\Broadcasting\Broadcaster`
+- `Illuminate\Contracts\Cache\Repository`
+- `Illuminate\Contracts\Config\Repository`
+- `Illuminate\Contracts\Container\Container`
+- `Illuminate\Contracts\Database\ModelIdentifier`
+- `Illuminate\Contracts\Events\Dispatcher`
+- `Illuminate\Contracts\Filesystem\Filesystem`
+- `Illuminate\Contracts\Mail\Mailer`
+- `Illuminate\Contracts\Queue\Queue`
+- `Illuminate\Contracts\Routing\UrlGenerator`
+- `Illuminate\Contracts\Support\Arrayable`
+
+Полный список доступен в репозитории `illuminate/contracts`. Документация Laravel также содержит таблицу соответствия
+между фасадами и контрактами.
+
+## Как реализованы контракты {#how-contracts-work}
+
+В сервис-контейнере каждому контракту соответствует привязка. Например, `Illuminate\Contracts\Queue\Queue` сопоставляется
+с реализацией очереди (Redis, database, SQS). При типизации аргумента контейнер автоматически предоставит нужную реализацию.
 
 ```php
-namespace App\Listeners;
+use Illuminate\Contracts\Queue\Queue;
 
-use App\Events\OrderWasPlaced;
-use Illuminate\Contracts\Redis\Factory as RedisFactory;
-
-class CacheOrderInformation
+class ReportController
 {
-    public function __construct(protected RedisFactory $redis)
+    public function __construct(private Queue $queue)
     {
-        // Внедряем фабрику Redis
-    }
-
-    public function handle(OrderWasPlaced $event): void
-    {
-        // ... логика обработки события ...
     }
 }
 ```
 
-Когда этот слушатель будет создан контейнером, Laravel проанализирует типы аргументов конструктора (`RedisFactory`) и предоставит соответствующий объект. Подробнее о регистрации сервисов в контейнере можно узнать в разделах о [сервис‑контейнере](/docs/12.x/container) и [поставщиках сервисов](/docs/12.x/providers).
+## Контракты и тестирование {#contracts-and-testing}
 
-## Справочник контрактов {#contract-reference}
+Контракты упрощают подмену зависимостей в тестах. Используйте `Queue::fake()`, `Mail::fake()` или создайте мок, зарегистрировав
+его в контейнере:
 
-Документация Laravel включает таблицу соответствия между стандартными контрактами и фасадами, что помогает быстро узнать, какой фасад предоставляет реализацию для данного интерфейса. Некоторые примеры:
+```php
+$this->app->instance(Queue::class, new FakeQueue);
+```
 
-| Контракт | Эквивалентный фасад |
-| --- | --- |
-| `Illuminate\Contracts\Auth\Access\Gate` | `Gate` |
-| `Illuminate\Contracts\Auth\Factory` | `Auth` |
-| `Illuminate\Contracts\Bus\Dispatcher` | `Bus` |
-| `Illuminate\Contracts\Cache\Factory` | `Cache` |
-| `Illuminate\Contracts\Config\Repository` | `Config` |
-| `Illuminate\Contracts\Container\Container` | `App` |
-| `Illuminate\Contracts\Mail\Mailer` | `Mail` |
-| `Illuminate\Contracts\Queue\Queue` | `Queue` |
-| `Illuminate\Contracts\Redis\Factory` | `Redis` |
-| `Illuminate\Contracts\Routing\Registrar` | `Route` |
-| `Illuminate\Contracts\Routing\UrlGenerator` | `URL` |
-| `Illuminate\Contracts\Session\Session` | `Session` |
-| `Illuminate\Contracts\Validation\Factory` | `Validator` |
-| `Illuminate\Contracts\View\Factory` | `View` |
-
-Полный список доступен в таблице справочника в официальной документации.
+Таким образом, ваш код остаётся гибким и готовым к замене реализаций без изменения бизнес-логики.

@@ -1,153 +1,144 @@
-# Трансляция событий {#broadcasting}
+# Трансляции событий {#broadcasting}
 
-Трансляция (broadcasting) позволяет вашей Laravel‑приложению отправлять события клиентским приложениям через WebSocket‑соединение. Это даёт возможность делиться одними и теми же именами событий и данными между сервером и JavaScript‑приложением, создавая реактивный пользовательский интерфейс. Клиенты подписываются на именованные каналы, а сервер отправляет события в эти каналы. Все настройки и маршруты, связанные с трансляцией, находятся в файлах `config/broadcasting.php` и `routes/channels.php`【872680393823144†L373-L380】.
+- [Введение](#introduction)
+- [Конфигурация](#configuration)
+  - [Драйверы](#driver-prerequisites)
+  - [Учетные данные](#broadcasting-configuration)
+- [Определение событий](#defining-broadcast-events)
+- [Трансляция событий](#broadcasting-events)
+  - [Каналы](#broadcast-channels)
+  - [Приватные каналы](#defining-authorization-callbacks)
+  - [Присутствие](#authorizing-presence-channels)
+- [Прослушивание на клиенте](#client-side-installation)
+  - [Laravel Echo](#installing-laravel-echo)
+  - [События типа notification](#listening-for-events)
+- [Трансляции с Reverb / Pusher / Ably](#supported-broadcasters)
+- [Трансляции через очереди](#broadcasting-and-queues)
+- [Тестирование](#testing)
 
-## Поддерживаемые драйверы {#supported-drivers}
+## Введение {#introduction}
 
-Laravel включает несколько серверных драйверов для трансляции событий: **Laravel Reverb**, **Pusher Channels** и **Ably**. Кроме того, доступен драйвер `log` для локальной разработки и отладки и `null`‑драйвер, который отключает трансляцию во время тестирования【872680393823144†L373-L380】. Каждый драйвер требует некоторых пакетов и настройки переменных окружения.
+Laravel предоставляет удобный API для трансляции серверных событий в браузер в реальном времени. Это упрощает создание
+чатов, панелей мониторинга, уведомлений и совместной работы. Laravel поддерживает WebSocket-сервер [Laravel Reverb](https://laravel.com/docs/reverb), а также внешние сервисы Pusher, Ably и Socket.io.
 
-## Быстрый старт {#quickstart}
+## Конфигурация {#configuration}
 
-По умолчанию трансляция не включена в новых приложениях. Для быстрой настройки используйте Artisan‑команду:
+Все настройки находятся в `config/broadcasting.php`. По умолчанию драйвер `log` просто пишет события в логи. Чтобы
+использовать WebSocket-подключение, выберите драйвер `reverb`, `pusher` или `ably` в `.env` (переменная `BROADCAST_DRIVER`).
 
-```bash
-php artisan install:broadcasting
+### Драйверы {#driver-prerequisites}
+
+- **Reverb.** Требует Laravel 11+ и установленный пакет `laravel/reverb`. Запустите `php artisan reverb:install` для генерации
+  конфигурации и `php artisan reverb:start` для запуска локального сервера.
+- **Pusher.** Зарегистрируйтесь на [pusher.com](https://pusher.com), создайте приложение и скопируйте ключи.
+- **Ably.** Создайте аккаунт на [ably.com](https://ably.com) и используйте API-ключ.
+- **Redis.** Можно использовать для внутренних трансляций, но для браузера потребуется дополнительный сервер WebSocket.
+
+### Учетные данные {#broadcasting-configuration}
+
+Настройте значения `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, `PUSHER_APP_CLUSTER` или аналогичные ключи Ably.
+Для Reverb используйте `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET` и настройте порт/хост в `config/reverb.php`.
+
+## Определение событий {#defining-broadcast-events}
+
+Создайте событие командой `php artisan make:event OrderShipped`. Реализуйте интерфейс `ShouldBroadcast` или `ShouldBroadcastNow`
+для немедленной трансляции:
+
+```php
+class OrderShipped implements ShouldBroadcast
+{
+    use SerializesModels;
+
+    public function __construct(public Order $order) {}
+
+    public function broadcastOn(): array
+    {
+        return [new PrivateChannel('orders.'.$this->order->id)];
+    }
+}
 ```
 
-Команда создаст файл `config/broadcasting.php` и файл `routes/channels.php`, где можно определить маршруты авторизации для ваших каналов. При выполнении команды вас попросят выбрать драйвер трансляции (Reverb, Pusher или Ably), а также будут установлены необходимые Composer‑ и NPM‑зависимости и обновлён файл `.env`【872680393823144†L373-L380】. После включения трансляции убедитесь, что запущен worker очереди (`php artisan queue:work`), поскольку трансляция выполняется через очереди【306892849852819†L369-L371】.
+Метод `broadcastAs` позволяет задать пользовательское имя события. По умолчанию событие будет транслироваться с именем класса.
 
-## Серверная установка {#server-installation}
+## Трансляция событий {#broadcasting-events}
 
-### Reverb {#reverb}
+Диспатчите события с помощью `event(new OrderShipped($order));`. Если событие реализует `ShouldBroadcast`, оно будет отправлено
+в очередь `broadcasting`. Убедитесь, что обработчик очереди запущен (`php artisan queue:work`).
 
-Laravel Reverb — это собственный веб‑сокет‑сервер. Для быстрой установки выполните команду:
+### Каналы {#broadcast-channels}
 
-```bash
-php artisan install:broadcasting --reverb
+Laravel предоставляет типы каналов: `PublicChannel`, `PrivateChannel`, `PresenceChannel`.
+
+### Приватные каналы {#defining-authorization-callbacks}
+
+Приватные каналы требуют авторизации. Определите правила в `routes/channels.php`:
+
+```php
+Broadcast::channel('orders.{order}', function (User $user, Order $order) {
+    return $user->id === $order->user_id;
+});
 ```
 
-Команда установит пакеты Reverb, создаст конфигурацию и обновит `.env`. Можно установить Reverb вручную: `composer require laravel/reverb`, затем выполнить `php artisan reverb:install`, чтобы опубликовать конфигурацию и добавить необходимые переменные окружения【872680393823144†L383-L413】.
+### Присутствие {#authorizing-presence-channels}
 
-### Pusher Channels {#pusher-channels}
+Каналы присутствия позволяют видеть список участников. Возвращайте массив данных о пользователе:
 
-Pusher предоставляет управляемый веб‑сокет‑сервис. Чтобы настроить Pusher автоматически, выполните:
-
-```bash
-php artisan install:broadcasting --pusher
+```php
+Broadcast::channel('chat.{roomId}', function (User $user, int $roomId) {
+    return ['id' => $user->id, 'name' => $user->name];
+});
 ```
 
-Команда установит SDK PHP и JavaScript и запросит ваши учётные данные Pusher. При ручной установке необходимо установить PHP‑пакет `pusher/pusher-php-server` и заполнить переменные `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET` и `PUSHER_APP_CLUSTER` в файле `.env`. Далее установите `BROADCAST_CONNECTION=pusher`【872680393823144†L416-L475】.
+## Прослушивание на клиенте {#client-side-installation}
 
-### Ably {#ably}
+### Laravel Echo {#installing-laravel-echo}
 
-Ably — облачный сервис реального времени. Быстрая установка выглядит так:
-
-```bash
-php artisan install:broadcasting --ably
-```
-
-Команда установит SDK для PHP и JavaScript и попросит ввести ключ Ably. Вы также можете установить пакет вручную командой `composer require ably/ably-php` и задать переменную `ABLY_KEY` в `.env`, после чего установите `BROADCAST_CONNECTION=ably`【872680393823144†L479-L525】.
-
-## Клиентская установка {#client-installation}
-
-На стороне клиента для приёма событий используется библиотека **Laravel Echo**. При использовании команды `install:broadcasting` все необходимые файлы Echo автоматически добавляются в приложение. Для ручной настройки установите зависимости через NPM:
+Laravel Echo — библиотека JavaScript для подписки на каналы. Установите её:
 
 ```bash
 npm install --save-dev laravel-echo pusher-js
 ```
 
-или для Reverb — `@reverb/client`, для Ably — `ably`. Инициализируйте Echo в файле `resources/js/bootstrap.js` и укажите соответствующий драйвер и ключи. Например, для Pusher:
+Для Reverb используйте `laravel-reverb-js`. Настройте Echo в `resources/js/bootstrap.js`:
 
 ```js
 import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
 
 window.Echo = new Echo({
     broadcaster: 'pusher',
     key: import.meta.env.VITE_PUSHER_APP_KEY,
-    cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-    encrypted: true,
+    wsHost: window.location.hostname,
+    wsPort: 6001,
+    forceTLS: false,
 });
 ```
 
-## Определение событий {#defining-broadcast-events}
+### События типа notification {#listening-for-events}
 
-Чтобы событие транслировалось, класс события должен реализовать интерфейс `ShouldBroadcast`. Этот интерфейс требует реализации метода `broadcastOn()`, который возвращает канал или массив каналов (`Channel`, `PrivateChannel` или `PresenceChannel`), на которые следует отправлять событие【872680393823144†L1364-L1478】. Каналы `Channel` открыты для всех пользователей, а `PrivateChannel` и `PresenceChannel` требуют авторизации.
+Используйте `Echo.private('orders.' + orderId).listen('OrderShipped', (event) => { ... });` для обработки событий. Для каналов
+присутствия используйте `join`, `here`, `joining`, `leaving`.
 
-Пример:
+## Трансляции с Reverb / Pusher / Ably {#supported-broadcasters}
 
-```php
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Queue\SerializesModels;
+Laravel Reverb предоставляет управляемый сервер WebSocket с масштабированием. Pusher и Ably — облачные провайдеры, которые
+автоматически масштабируют соединения и предлагают дополнительные функции (воспроизведение сообщений, отложенные события).
+Выберите решение, соответствующее вашему бюджету и требованиям к инфраструктуре.
 
-class ServerCreated implements ShouldBroadcast
-{
-    use SerializesModels;
+## Трансляции через очереди {#broadcasting-and-queues}
 
-    public function __construct(public \App\Models\User $user) {}
+Трансляции выполняются через очередь `broadcast`. Настройте драйвер очереди (Redis, database, SQS) и запустите воркер. Используйте
+`ShouldBroadcastNow`, чтобы пропустить очередь и отправить событие немедленно.
 
-    public function broadcastOn(): array
-    {
-        return [
-            new PrivateChannel('user.'.$this->user->id),
-        ];
-    }
-}
-```
+## Тестирование {#testing}
 
-### Имя и данные события {#broadcast-name-and-data}
-
-По умолчанию в качестве имени события используется имя его класса. Метод `broadcastAs()` позволяет указать своё имя события; при этом при прослушивании события в Echo имя следует начинать с точки, чтобы избежать добавления пространства имён【872680393823144†L1490-L1520】. Все публичные свойства события автоматически сериализуются и передаются в payload. Для тонкой настройки данных можно определить метод `broadcastWith()`, который возвращает массив данных для отправки【872680393823144†L1532-L1572】.
-
-### Очередь и соединение {#broadcast-queue}
-
-Вы можете указать очередь, в которой будет транслироваться событие, определив свойство `$broadcastQueue` в классе события. Также можно изменить соединение очередей через метод `broadcastVia()` или свойство `$connection` в классе события. Эти параметры позволяют разделять ресурсоёмкие трансляции от других задач.
-
-## Авторизация каналов {#channels}
-
-Маршруты авторизации каналов определяются в файле `routes/channels.php`. Для приватных каналов используйте функцию `Broadcast::channel()` и верните `true`, если пользователь имеет доступ к каналу. Например:
+Вы можете фейкать трансляции в тестах:
 
 ```php
-use Illuminate\Support\Facades\Broadcast;
+Broadcast::fake();
 
-Broadcast::channel('order.{order}', function ($user, $order) {
-    return $user->id === $order->user_id;
-});
+event(new OrderShipped($order));
+
+Broadcast::assertSentOnChannel('private-orders.'.$order->id);
 ```
 
-Для присутствующих каналов (`PresenceChannel`) используйте такую же функцию, но верните массив данных пользователя (например, имя), который будет виден всем участникам канала. Благодаря этому клиенты могут видеть, кто находится в комнате.
-
-## Прослушивание событий в клиентском приложении {#listening-to-events}
-
-После настройки серверной и клиентской части события можно прослушивать на фронтенде. Например, для приватного канала `user.{id}`:
-
-```js
-Echo.private(`user.${userId}`)
-    .listen('ServerCreated', (e) => {
-        console.log('Сервер создан для пользователя', e.user);
-    });
-```
-
-Для событий с переопределённым именем используйте точку перед именем: `.listen('.server.created', ...)`【872680393823144†L1518-L1520】. Для присутствующих каналов используйте метод `join()`, который позволяет отслеживать список присутствующих пользователей:
-
-```js
-Echo.join(`chat.${roomId}`)
-    .here((users) => {
-        // список подключенных пользователей
-    })
-    .joining((user) => {
-        // пользователь присоединился
-    })
-    .leaving((user) => {
-        // пользователь покинул канал
-    });
-```
-
-## Конфигурация {#broadcast-configuration}
-
-Файл `config/broadcasting.php` содержит параметры трансляции. В опции `default` задаётся активный драйвер, а секция `connections` содержит конфигурации для Reverb, Pusher, Ably, `log` и `null`. Во время разработки можно использовать драйвер `log`, который запишет события в лог, а в тестах — драйвер `null` для полного отключения трансляции.
-
-## Заключение {#conclusion}
-
-Laravel упрощает трансляцию событий, позволяя в реальном времени уведомлять клиентов о действиях на сервере. Настройте соответствующий драйвер (Reverb, Pusher или Ably), определите события, авторизуйте каналы, и используйте библиотеку Laravel Echo на клиенте для получения событий. Более подробные инструкции и примеры доступны в официальной документации Laravel【872680393823144†L383-L413】【872680393823144†L416-L475】.
+Также доступны методы `assertNotSent`, `assertSent` и проверка данных события.

@@ -3,217 +3,216 @@
 - [Введение](#introduction)
 - [Создание контроллеров](#writing-controllers)
   - [Базовые контроллеры](#basic-controllers)
-  - [Контроллеры с единственным действием](#single-action-controllers)
-  - [Промежуточные слои в контроллерах](#controller-middleware)
-- [Контроллеры‑ресурсы](#resource-controllers)
-  - [Частичные и API‑ресурсы](#partial-and-api-resources)
+  - [Single Action Controllers](#single-action-controllers)
+  - [Вложенные контроллеры и пространства имён](#controller-namespaces)
+- [Маршрутизация контроллеров](#controller-routing)
+  - [Маршруты контроллеров](#controller-routes)
+  - [Маршруты ресурса](#resource-controllers)
+  - [Частичные ресурсы](#partial-resource-routes)
   - [Вложенные ресурсы](#nested-resources)
-  - [Настройка имён и параметров](#naming-and-parameters)
-  - [Синглтон‑ресурсы](#singleton-resources)
-- [Внедрение зависимостей](#dependency-injection)
+  - [Shallow-маршруты](#shallow-nesting)
+  - [Soft-deletable ресурсы](#soft-deletable-resources)
+  - [API-ресурсы](#api-resource-routes)
+  - [Переименование действий](#restful-naming)
+  - [Именование маршрутов](#resource-route-names)
+- [Dependency Injection и контейнер](#dependency-injection-and-controllers)
+- [Промежуточное ПО](#controller-middleware)
+- [Контроллеры-инвокеры](#invokable-controllers)
 
 ## Введение {#introduction}
 
-Вместо того чтобы описывать всю логику обработки запросов в виде замыканий в
-файлах маршрутов, вы можете организовать код в классах **контроллеров**.
-Контроллеры группируют связанную логику в единый класс. Например,
-`UserController` может отвечать за отображение, создание, обновление и удаление
-пользователей. По умолчанию все контроллеры располагаются в каталоге
-`app/Http/Controllers`.
+Контроллеры группируют связанную бизнес-логику обработки запросов. Вместо того чтобы определять всю логику непосредственно
+в маршрутах, вы можете вынести её в классы. Контроллеры располагаются в каталоге `app/Http/Controllers` и могут быть
+организованы по областям ответственности: `Admin`, `Auth`, `API` и т. д.
 
 ## Создание контроллеров {#writing-controllers}
 
-### Базовые контроллеры {#basic-controllers}
-
-Для создания контроллера воспользуйтесь Artisan‑командой `make:controller`:
+Создайте контроллер командой Artisan:
 
 ```bash
-php artisan make:controller UserController
+php artisan make:controller PhotoController
 ```
 
-Внутри контроллера вы можете определить любое количество публичных методов,
-которые будут отвечать на входящие HTTP‑запросы. Например, метод `show`
-отображает профиль пользователя:
+Команда создаст класс в `app/Http/Controllers`. Используйте флаг `--invokable`, чтобы сгенерировать контроллер с единственным
+методом `__invoke`, и `--resource` для контроллера-ресурса со стандартными действиями.
+
+### Базовые контроллеры {#basic-controllers}
+
+Контроллер — это обычный PHP-класс, который расширяет `App\Http\Controllers\Controller`. Вы можете возвращать строки, ответы,
+представления или объекты Response. Пример:
 
 ```php
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\Photo;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
-class UserController extends Controller
+class PhotoController extends Controller
 {
-    /**
-     * Отобразить профиль пользователя.
-     */
-    public function show(string $id): View
+    public function index(): View
     {
-        return view('user.profile', [
-            'user' => User::findOrFail($id),
+        return view('photos.index', [
+            'photos' => Photo::latest()->paginate(),
         ]);
     }
-}
-```
 
-После создания метода необходимо связать его с маршрутом. В файлах маршрутов
-используется массив `[Controller::class, 'method']`:
-
-```php
-use App\Http\Controllers\UserController;
-
-Route::get('/user/{id}', [UserController::class, 'show']);
-```
-
-### Контроллеры с единственным действием {#single-action-controllers}
-
-Если операция слишком сложна, чтобы быть методом обычного контроллера, можно
-создать контроллер с одним действием. Такой контроллер имеет только метод
-`__invoke`. При определении маршрута указывается только имя класса, а при
-создании используется опция `--invokable`:
-
-```bash
-php artisan make:controller ProvisionServer --invokable
-
-// routes/web.php
-use App\Http\Controllers\ProvisionServer;
-Route::post('/server', ProvisionServer::class);
-```
-
-### Промежуточные слои в контроллерах {#controller-middleware}
-
-Вы можете назначать посредники (middleware) непосредственно контроллеру. Это
-делается либо в файле маршрутов методом `middleware()`, либо в самом
-контроллере через реализацию интерфейса `HasMiddleware` и определение метода
-`middleware`. В методе возвращается массив строк
-или объектов `Middleware`, в котором можно указывать, какие методы должны
-обработать определённые посредники:
-
-```php
-use Illuminate\Routing\Controllers\HasMiddleware;
-use Illuminate\Routing\Controllers\Middleware;
-
-class UserController extends Controller implements HasMiddleware
-{
-    public static function middleware(): array
+    public function store(Request $request): RedirectResponse
     {
-        return [
-            'auth',
-            new Middleware('log', only: ['index']),
-            new Middleware('subscribed', except: ['store']),
-        ];
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'image' => ['required', 'image'],
+        ]);
+
+        $photo = $request->user()->photos()->create($validated);
+
+        return redirect()->route('photos.show', $photo);
     }
 }
 ```
 
-## Контроллеры‑ресурсы {#resource-controllers}
+### Single Action Controllers {#single-action-controllers}
 
-Если вы рассматриваете каждую модель Eloquent как «ресурс», то часто вы
-выполняете над ней типичные операции: создание, просмотр, обновление и удаление
-(CRUD). Laravel позволяет автоматически создать контроллер с методами для этих
-действий командой:
-
-```bash
-php artisan make:controller PhotoController --resource
-```
-
-Эта команда создаст файл `app/Http/Controllers/PhotoController.php` с
-методами `index`, `create`, `store`, `show`, `edit`, `update` и `destroy`. Для
-регистрации всех маршрутов достаточно одного вызова `Route::resource`:
+Если контроллер обслуживает единственное действие, реализуйте метод `__invoke`:
 
 ```php
-use App\Http\Controllers\PhotoController;
+php artisan make:controller UploadAvatar --invokable
+```
+
+```php
+class UploadAvatar extends Controller
+{
+    public function __invoke(Request $request): RedirectResponse
+    {
+        $request->user()->updateAvatar($request->file('avatar'));
+
+        return back();
+    }
+}
+```
+
+Маршрут регистрируется с помощью `Route::post('/avatar', UploadAvatar::class);`.
+
+### Вложенные контроллеры и пространства имён {#controller-namespaces}
+
+Вы можете группировать контроллеры по подпапкам. Laravel автоматически определит пространство имён на основе расположения
+файла. Для контроллеров API можно использовать `php artisan make:controller API/PostController --api`, что создаст класс в
+`App\Http\Controllers\API`.
+
+## Маршрутизация контроллеров {#controller-routing}
+
+### Маршруты контроллеров {#controller-routes}
+
+Используйте метод `controller`, чтобы сопоставить множество URI одному классу:
+
+```php
+Route::controller(OrderController::class)->group(function () {
+    Route::get('/orders/{order}', 'show');
+    Route::post('/orders', 'store');
+});
+```
+
+Метод `controller` применяет базовый префикс ко всем маршрутам группы и позволяет писать имена методов в виде строк без
+явного указания контроллера.
+
+### Маршруты ресурса {#resource-controllers}
+
+Контроллер-ресурс соответствует REST-стилю и включает действия `index`, `create`, `store`, `show`, `edit`, `update`, `destroy`.
+Генерация маршрута выполняется так:
+
+```php
 Route::resource('photos', PhotoController::class);
 ```
 
-Laravel также предоставляет методы `resources` и `softDeletableResources` для
-регистрации нескольких ресурсов одновременно. Последний автоматически
-включает обработку «мягко» удалённых моделей (soft deletes).
+Созданные маршруты можно просмотреть с помощью `php artisan route:list --path=photos`.
 
-Таблица действий, обрабатываемых ресурсными контроллерами, включает семь
-стандартных маршрутов, например `GET /photos` (метод `index`) и `DELETE
-/photos/{photo}` (метод `destroy`).
+### Частичные ресурсы {#partial-resource-routes}
 
-К ресурсному маршруту можно добавить обработчик для случая, когда модель не
-найдена. Метод `missing` принимает замыкание, которое будет вызвано, если
-модель не будет найдена, и позволяет вернуть альтернативный ответ или
-перенаправление. Для работы с «мягко» удалёнными
-моделями используйте метод `withTrashed`.
-
-#### Настройка генерации
-
-Команда `make:controller` поддерживает опции `--model=Photo` для указания
-класса модели по умолчанию и `--requests` для генерации классов запросов,
-которые будут использоваться методами `store` и `update`.
-
-### Частичные и API‑ресурсы {#partial-and-api-resources}
-
-Иногда необходимо сгенерировать только часть маршрутов ресурса. Метод
-`only` позволяет указать список действий, которые должны быть созданы, а
-`except` — исключить ненужные маршруты:
+Чтобы сгенерировать только нужные действия, используйте `only` или `except`:
 
 ```php
-Route::resource('photos', PhotoController::class)->only([
-    'index', 'show',
-]);
-Route::resource('photos', PhotoController::class)->except([
-    'create', 'store', 'update', 'destroy',
-]);
+Route::resource('photos', PhotoController::class)->only(['index', 'show']);
 ```
-
-Для API‑маршрутов, где обычно не нужны HTML‑страницы `create` и `edit`,
-используйте метод `apiResource` или `apiResources` для регистрации
-одного или нескольких ресурсов. Можно также сгенерировать API‑контроллер
-с помощью опции `--api` команды `make:controller`.
 
 ### Вложенные ресурсы {#nested-resources}
 
-Если ресурс имеет дочерние сущности (например, фотографии и комментарии),
-их можно описать вложенным ресурсом, используя точечную нотацию:
-
 ```php
-Route::resource('photos.comments', PhotoCommentController::class);
+Route::resource('users.posts', PostController::class);
 ```
 
-Laravel также поддерживает «shallow» вложенность — в этом случае часть
-маршрутов не требует указания идентификатора родительской модели. Метод
-`shallow()` регистрирует соответствующие маршруты.
+URL вида `/users/{user}/posts/{post}` автоматически получат привязку моделей. Используйте `scopeBindings`, чтобы ограничить
+дочерние модели родительскими.
 
-Вы можете автоматически ограничить вложенные связывания, чтобы убедиться, что
-дочерняя модель принадлежит родительской. Метод `scoped` позволяет указать,
-по какому полю следует извлекать модель, например slug.
+### Shallow-маршруты {#shallow-nesting}
 
-### Настройка имён и параметров {#naming-and-parameters}
-
-Имена маршрутов, создаваемых `Route::resource`, можно переопределить,
-передав массив `names`. Аналогично можно изменить
-имя параметра, используемого в URI, с помощью метода `parameters`:
+Для вложенных ресурсов вы можете сократить вложенность маршрутов, используя `shallow()`:
 
 ```php
-Route::resource('users', AdminUserController::class)->parameters([
-    'users' => 'admin_user',
+Route::resource('users.posts', PostController::class)->shallow();
+```
+
+Методы `show`, `edit`, `update`, `destroy` получат URI вида `/posts/{post}`.
+
+### Soft-deletable ресурсы {#soft-deletable-resources}
+
+Если модель использует мягкое удаление (`SoftDeletes`), добавьте `->withTrashed()` для маршрутов, которые должны работать с
+удалёнными ресурсами, и `->onlyTrashed()` — если маршрут обслуживает только удалённые записи.
+
+### API-ресурсы {#api-resource-routes}
+
+Маршруты API-ресурсов не включают действия `create` и `edit`, предназначенные для отображения форм:
+
+```php
+Route::apiResource('photos', Api\PhotoController::class);
+```
+
+Laravel также предоставляет метод `apiResources` для регистрации нескольких ресурсов сразу.
+
+### Переименование действий {#restful-naming}
+
+Чтобы изменить имена методов или URI, используйте `names` и `parameters`:
+
+```php
+Route::resource('photos', PhotoController::class)->names([
+    'create' => 'photos.build',
+])->parameters([
+    'photos' => 'image',
 ]);
 ```
 
-### Синглтон‑ресурсы {#singleton-resources}
+### Именование маршрутов {#resource-route-names}
 
-Иногда ресурс существует в единственном экземпляре (например, профиль
-аутентифицированного пользователя). В таких случаях можно объявить «синглтон»
-ресурс, который генерирует маршруты без параметра идентификатора. Для этого
-используйте метод `Route::singleton`:
+Стандартные имена маршрутов включают `photos.index`, `photos.store`, `photos.update`. Используйте их для генерации URL через
+`route()` и `to_route()`.
+
+## Dependency Injection и контейнер {#dependency-injection-and-controllers}
+
+Контроллеры создаются через сервис-контейнер, поэтому вы можете запрашивать зависимости в конструкторах или методах. Контейнер
+автоматически разрешит типизированные аргументы (`Request`, собственные классы, контракты). Для методов ресурсов можно указать
+тип прямо в сигнатуре действия.
 
 ```php
-Route::singleton('profile', ProfileController::class);
+public function __construct(private PaymentGateway $gateway)
+{
+    $this->middleware('auth');
+}
 ```
 
-### Внедрение зависимостей {#dependency-injection}
+## Промежуточное ПО {#controller-middleware}
 
-Как и в других частях Laravel, вы можете явно указывать зависимости в
-методах контроллера. Фреймворк автоматически внедрит необходимые классы из
-контейнера. Это касается как сервисов (например, класс `Request`), так и
-моделей, если используется привязка моделей к маршрутам. Введение зависимостей
-через сигнатуры методов упрощает тестирование и улучшает читаемость кода.
+Метод `middleware` контроллера позволяет регистрировать посредников для отдельных действий. Вы можете использовать `only` и
+`except` для ограничения применения.
 
-Дополнительные опции, такие как локализация URI ресурсов, расширение
-ресурсных контроллеров и применение middleware к ресурсам, описаны в
-оригинальной документации. По мере необходимости вы можете изучить эти
-разделы для более сложных сценариев.
+```php
+public function __construct()
+{
+    $this->middleware('auth')->only(['create', 'store']);
+}
+```
+
+## Контроллеры-инвокеры {#invokable-controllers}
+
+Контроллер с методом `__invoke` полезен, когда требуется одна точка входа, например обработчик вебхука. Laravel автоматически
+вызывает `__invoke`, когда класс указан в маршруте без метода. Вы можете использовать dependency injection так же, как и в
+обычных контроллерах.

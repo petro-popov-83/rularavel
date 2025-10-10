@@ -1,62 +1,120 @@
-# Компиляция ресурсов (Vite) {#asset-bundling}
+# Сборка ресурсов {#asset-bundling}
+
+- [Введение](#introduction)
+- [Vite по умолчанию](#vite)
+  - [Установка зависимостей](#installing-dependencies)
+  - [Запуск dev-сервера](#running-dev-server)
+  - [Компиляция для продакшена](#building-for-production)
+  - [Горячая перезагрузка](#hot-module-replacement)
+- [Использование ресурсов в Blade](#using-vite-in-blade)
+- [Встраивание статических ассетов](#static-assets)
+- [TypeScript и JSX](#typescript-and-jsx)
+- [CSS и PostCSS](#css-and-postcss)
+- [Sass / Less / Stylus](#sass-less-stylus)
+- [Env и конфигурация Vite](#vite-configuration)
+- [Серверные рендеры Inertia / Vue / React](#inertia-ssr)
+- [Альтернативные сборщики](#alternative-bundlers)
 
 ## Введение {#introduction}
 
-Начиная с Laravel 9, сборщик Vite стал стандартным инструментом для компиляции JavaScript/TypeScript и стилей. Vite обеспечивает мгновенную быструю сборку и горячую перезагрузку в режиме разработки. По умолчанию исходные файлы приложения находятся в каталоге `resources/js` и `resources/css`, а конфигурация Vite задаётся в файле `vite.config.js`. Для запуска сервера разработки используйте команду `npm run dev` или `bun run dev`, а для сборки в production — `npm run build`.
+Начиная с Laravel 9, Vite — стандартный инструмент для компиляции JavaScript и CSS. Он обеспечивает мгновенный запуск dev-сервера,
+модульную горячую перезагрузку и оптимизированные сборки. Laravel предоставляет удобные хелперы для интеграции Vite с Blade,
+Inertia и Livewire.
 
-В шаблонах Blade для подключения собранных файлов используются директивы `@vite(['resources/js/app.js', 'resources/css/app.css'])`. Эти директивы позаботятся о загрузке необходимых скриптов и стилей.
+## Vite по умолчанию {#vite}
 
-## Обработка статических файлов {#processing-static-assets-with-vite}
+### Установка зависимостей {#installing-dependencies}
 
-Vite автоматически обрабатывает и версионирует файлы, на которые есть ссылки в вашем JavaScript или CSS. Если вам нужно, чтобы Vite обработал изображения или шрифты, которые используются только в Blade‑шаблонах, импортируйте их в главный JS‑файл с помощью конструкции `import.meta.glob()`. Например, чтобы подключить все изображения из `resources/images` и шрифты из `resources/fonts`, добавьте в `resources/js/app.js`:
+После установки нового приложения выполните:
 
-```js
-import.meta.glob([
-  '../images/**',
-  '../fonts/**',
-]);
+```bash
+npm install
 ```
 
-После этого файлы будут обработаны при запуске `npm run build`, а их хешированные URL можно получить в шаблоне через вспомогательный метод `Vite::asset`:
+или используйте Bun / Yarn. Пакет `laravel-vite-plugin` поставляется из коробки и конфигурирует импорт ресурсов.
+
+### Запуск dev-сервера {#running-dev-server}
+
+```bash
+npm run dev
+```
+
+Команда запускает Vite в режиме разработки. Laravel автоматически определяет активный сервер и вставляет необходимые теги в
+представления при использовании директивы `@vite`.
+
+### Компиляция для продакшена {#building-for-production}
+
+```bash
+npm run build
+```
+
+Создаёт минифицированные файлы в `public/build` и манифест `manifest.json`. Laravel использует манифест для генерации ссылок на
+хешированные ресурсы.
+
+### Горячая перезагрузка {#hot-module-replacement}
+
+В режиме разработки Vite подключает веб-сокет, который автоматически обновляет страницу при изменении файлов. Нет необходимости
+перезапускать сервер.
+
+## Использование ресурсов в Blade {#using-vite-in-blade}
+
+Подключайте входные точки с помощью директивы:
 
 ```blade
-<img src="{{ Vite::asset('resources/images/logo.png') }}">
+@vite(['resources/css/app.css', 'resources/js/app.js'])
 ```
 
-## Автоматическое обновление при сохранении {#refreshing-on-save}
+Если вы используете Inertia, директива `@viteReactRefresh` или `@vite` автоматически добавляется шаблонами `app.blade.php`
+поставляемых стартовых наборов.
 
-При разработке Blade‑приложений Vite может автоматически обновлять страницу после изменения файлов. Для этого задайте опцию `refresh: true` в конфигурации Vite:
+Метод `Vite::useBuildDirectory('static')` позволяет изменить директорию вывода. Для тестирования вы можете принудительно включить
+компилированные ассеты, вызвав `Vite::useHotFile(false)`.
+
+## Встраивание статических ассетов {#static-assets}
+
+Используйте хелпер `Vite::asset('resources/images/logo.svg')`, чтобы получить хешированный URL. Для импортов внутри JavaScript
+можно использовать синтаксис `new URL('./logo.png', import.meta.url)`.
+
+## TypeScript и JSX {#typescript-and-jsx}
+
+Vite автоматически компилирует TypeScript, JSX и TSX. Переименуйте файлы на `.ts` или `.tsx` и импортируйте их из `app.js`. Для
+улучшения DX установите типы `@types/node` и настройте `tsconfig.json`.
+
+## CSS и PostCSS {#css-and-postcss}
+
+Laravel поставляется с PostCSS. Файл `postcss.config.js` по умолчанию включает `autoprefixer` и может быть расширен Tailwind CSS
+или другими плагинами. Импортируйте CSS непосредственно в `app.js` или используйте файл `app.css`.
+
+## Sass / Less / Stylus {#sass-less-stylus}
+
+Установите соответствующий препроцессор:
+
+```bash
+npm install --save-dev sass
+```
+
+Затем импортируйте `.scss` в `resources/js/app.js` или укажите его как отдельную точку входа в `vite.config.js`.
+
+## Env и конфигурация Vite {#vite-configuration}
+
+Файл `vite.config.js` уже содержит плагин `laravel`. Вы можете расширить конфигурацию — например, определить алиасы:
 
 ```js
-import { defineConfig } from 'vite';
-import laravel from 'laravel-vite-plugin';
-
 export default defineConfig({
-    plugins: [
-        laravel({
-            refresh: true,
-        }),
-    ],
+    plugins: [laravel({ input: ['resources/js/app.js'], refresh: true })],
+    resolve: { alias: { '@': '/resources/js' } },
 });
 ```
 
-В этом режиме при изменении файлов в каталогах `app/Livewire/**`, `app/View/Components/**`, `lang/**`, `resources/lang/**`, `resources/views/**` и `routes/**` браузер будет выполнять полное обновление страницы. При необходимости можно указать собственный список наблюдаемых путей, передав массив директорий в параметр `refresh`. Под капотом используется пакет `vite-plugin-full-reload`, который позволяет тонко настроить поведение перезагрузки, например задав задержку в миллисекундах.
+Переменные окружения `.env` с префиксом `VITE_` доступны в клиентском коде как `import.meta.env.VITE_SOME_KEY`.
 
-## Псевдонимы и макросы {#aliases-and-macros}
+## Серверные рендеры Inertia / Vue / React {#inertia-ssr}
 
-В больших проектах удобно создавать псевдонимы для часто используемых путей. В классе `Vite` можно определить собственные макросы через метод `macro`. Например, чтобы создать удобный метод для получения изображений из каталога `resources/images`, добавьте в метод `boot` вашего `AppServiceProvider`:
+Если вы используете SSR, настройте `laravel-vite-plugin` с опцией `ssr: 'resources/js/ssr.js'` и запустите `npm run build &&
+npm run build:ssr`. Laravel автоматически определит серверный бандл при рендере.
 
-```php
-use Illuminate\Support\Facades\Vite;
+## Альтернативные сборщики {#alternative-bundlers}
 
-public function boot(): void
-{
-    Vite::macro('image', fn (string $asset) => Vite::asset("resources/images/{$asset}"));
-}
-```
-
-Теперь в шаблонах можно использовать `{{ Vite::image('logo.png') }}` для получения версии файла изображения.
-
-## Заключение
-
-Vite предоставляет высокую скорость разработки и гибкие возможности для обработки ваших ресурсов. Используя директивы `@vite`, динамическое подключение статических файлов, автоматическую перезагрузку при сохранении и собственные макросы, вы можете настроить современный процесс сборки фронтенда в проектах на Laravel.
+Вы можете использовать другие сборщики (Mix, Webpack, Rollup, esbuild). Однако Vite остаётся рекомендованным инструментом.
+Если вы переключаетесь на другой стек, убедитесь, что корректно генерируете хешированные ассеты и обновляете Blade-директивы
+для вставки ресурсов.

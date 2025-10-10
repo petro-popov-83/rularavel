@@ -1,317 +1,198 @@
 # Маршрутизация {#routing}
 
-## Основы маршрутизации {#basic-routing}
+- [Основы](#basic-routing)
+- [Параметры маршрутов](#route-parameters)
+  - [Обязательные параметры](#required-parameters)
+  - [Необязательные параметры](#optional-parameters)
+  - [Ограничения регулярными выражениями](#regular-expression-constraints)
+  - [Глобальные ограничения](#global-constraints)
+- [Именованные маршруты](#named-routes)
+- [Группы маршрутов](#route-groups)
+  - [Промежуточное ПО](#route-group-middleware)
+  - [Префиксы](#route-group-prefixes)
+  - [Общая конфигурация](#route-group-configuration)
+- [Маршрутизация контроллеров](#route-model-binding)
+  - [Неявная привязка](#implicit-binding)
+  - [Неявная привязка по параметрам перечисления](#enum-binding)
+  - [Явная привязка](#explicit-binding)
+- [Fallback и перенаправления](#fallback-routes)
+- [API и автоматическое оглавление](#api-routes)
+- [Кэширование маршрутов](#route-caching)
 
-Laravel предоставляет удобный механизм для определения HTTP‑маршрутов. Чтобы вернуть текст или выполнить произвольный код при обращении к URI, достаточно определить маршрут и передать анонимную функцию:
+## Основы {#basic-routing}
 
-```php
-Route::get('/greeting', function () {
-    return 'Привет, мир';
-});
-```
-
-Маршруты по умолчанию определяются в файлах `routes/web.php` для браузерных запросов и `routes/api.php` для API. API‑маршруты не имеют состояния и автоматически получают префикс `api` и группу посредников `api`. Для просмотра списка всех маршрутов используйте команду Artisan `php artisan route:list`, добавив параметры `-v` или `--path` для расширенного вывода.
-
-Чтобы перенаправить пользователя, используйте `Route::redirect('/from', '/to')`. Для постоянных перенаправлений возвращающих статус 301 предусмотрен метод `Route::permanentRedirect`. Если вместо контроллера нужно просто вернуть представление, используйте `Route::view('/welcome', 'welcome', [...данные...])`.
-
-Маршруты инициализируются в файле `bootstrap/app.php` методом `Application::configure()->withRouting(...)`. Вы можете указать дополнительные файлы или полностью взять на себя регистрацию маршрутов, передав замыкание `then` или `using`.
-
-## Параметры маршрутов {#route-parameters}
-
-### Обязательные параметры
-
-Чтобы извлечь часть URI как переменную, определите параметр в фигурных скобках. Порядок параметров влияет на порядок аргументов функции, а имена переменных в сигнатуре не обязательны:
-
-```php
-Route::get('/user/{id}', function (string $id) {
-    return 'Пользователь '.$id;
-});
-
-Route::get('/posts/{post}/comments/{comment}', function (string $postId, string $commentId) {
-    // ...
-});
-```
-
-При использовании внедрения зависимостей убедитесь, что параметр маршрута следует после зависимостей:
-
-```php
-use Illuminate\Http\Request;
-
-Route::get('/user/{id}', function (Request $request, string $id) {
-    return 'Пользователь '.$id;
-});
-```
-
-### Необязательные параметры
-
-Чтобы сделать параметр необязательным, добавьте `?` и укажите значение по умолчанию. Параметр может быть `null` или иметь другое значение по умолчанию:
-
-```php
-Route::get('/user/{name?}', function (?string $name = null) {
-    return $name;
-});
-
-Route::get('/user/{name?}', function (?string $name = 'Иван') {
-    return $name;
-});
-```
-
-### Ограничения регулярными выражениями
-
-Вы можете ограничить формат параметров методом `where`, передав имя параметра и регулярное выражение. Также существуют методы‑помощники: `whereNumber`, `whereAlpha`, `whereAlphaNumeric`, `whereUuid`, `whereUlid`, `whereIn` и др., позволяющие быстро добавить часто используемые шаблоны. Например:
-
-```php
-Route::get('/user/{id}/{name}', function (string $id, string $name) {
-    // ...
-})->where(['id' => '[0-9]+', 'name' => '[a-z]+']);
-
-Route::get('/user/{id}/{name}', function (string $id, string $name) {
-    // ...
-})->whereNumber('id')->whereAlpha('name');
-
-Route::get('/category/{category}', function (string $category) {
-    // ...
-})->whereIn('category', ['movie', 'song', 'painting']);
-```
-
-### Глобальные ограничения
-
-Если вы хотите навсегда связать конкретный параметр с регулярным выражением, определите шаблон в методе `boot` вашего `App\Providers\AppServiceProvider`:
+Все веб-маршруты Laravel определяются в файлах каталога `routes`. По умолчанию `routes/web.php` обслуживает браузерные
+запросы, а `routes/api.php` — stateless API. Для быстрого определения маршрута используйте методы фасада `Route`:
 
 ```php
 use Illuminate\Support\Facades\Route;
 
+Route::get('/welcome', function () {
+    return 'Добро пожаловать!';
+});
+```
+
+Методы `get`, `post`, `put`, `patch`, `delete`, `options` и `match` соответствуют HTTP-глаголам. Для маршрутов, возвращающих
+представления, удобен метод `view`, а для перенаправлений — `redirect`.
+
+```php
+Route::view('/about', 'about');
+Route::redirect('/old', '/new', 301);
+```
+
+Маршруты регистрируются во время выполнения метода `Application::configure()->withRouting(...)` в `bootstrap/app.php`. Вы
+можете передать дополнительные файлы маршрутов или полностью взять на себя регистрацию, предоставив замыкание.
+
+Для просмотра списка маршрутов используйте `php artisan route:list`. Добавьте флаги `--path` или `--columns` для фильтрации и
+управления выводом.
+
+## Параметры маршрутов {#route-parameters}
+
+### Обязательные параметры {#required-parameters}
+
+```php
+Route::get('/users/{user}', function (string $userId) {
+    return "Пользователь {$userId}";
+});
+```
+
+Laravel автоматически извлекает значение между фигурными скобками и передаёт его в обработчик. Параметры передаются в том
+порядке, в котором они определены в URI.
+
+При использовании внедрения зависимостей убедитесь, что параметр следует после зависимостей:
+
+```php
+use Illuminate\Http\Request;
+
+Route::get('/users/{user}', function (Request $request, string $user) {
+    return $request->ip().' → '.$user;
+});
+```
+
+### Необязательные параметры {#optional-parameters}
+
+Добавьте `?` к имени параметра и укажите значение по умолчанию:
+
+```php
+Route::get('/user/{name?}', function (?string $name = 'Гость') {
+    return $name;
+});
+```
+
+### Ограничения регулярными выражениями {#regular-expression-constraints}
+
+Используйте метод `where`, чтобы ограничить формат параметров:
+
+```php
+Route::get('/user/{id}/{slug}', function (int $id, string $slug) {
+    // ...
+})->where(['id' => '[0-9]+', 'slug' => '[A-Za-z-]+']);
+```
+
+Часто встречающиеся шаблоны можно задать с помощью `whereNumber`, `whereAlpha`, `whereAlphaNumeric`, `whereUuid`, `whereUlid`,
+`whereIn`.
+
+### Глобальные ограничения {#global-constraints}
+
+Определите шаблон в `App\Providers\RouteServiceProvider::boot`:
+
+```php
 public function boot(): void
 {
     Route::pattern('id', '[0-9]+');
 }
 ```
 
-Теперь любое использование параметра `{id}` будет автоматически ограничено числовым значением.
-
-### Кодированные косые черты
-
-По умолчанию маршрутизация Laravel не разрешает символ `/` в значениях параметров. Чтобы разрешить слеши, используйте шаблон `.*` в ограничении:
-
-```php
-Route::get('/search/{search}', function (string $search) {
-    return $search;
-})->where('search', '.*');
-```
-
-Слеши поддерживаются только в последнем сегменте URI.
+Все маршруты с параметром `id` автоматически унаследуют это ограничение.
 
 ## Именованные маршруты {#named-routes}
 
-Используйте метод `name`, чтобы присвоить маршруту уникальное имя. Это позволяет генерировать URL‑адреса и перенаправления по имени:
+Именованные маршруты упрощают генерацию URL и перенаправлений. Используйте метод `name`:
 
 ```php
-Route::get('/user/profile', function () {
-    // ...
-})->name('profile');
+Route::get('/profile', [ProfileController::class, 'show'])
+    ->name('profile.show');
 
-// Генерация URL
-$url = route('profile');
-
-// Перенаправление по имени
-return redirect()->route('profile');
-return to_route('profile');
+return to_route('profile.show');
 ```
 
-Если маршрут имеет параметры, передайте их вторым аргументом в функцию `route` — они автоматически подставятся в URL. Дополнительные параметры будут добавлены к строке запроса.
-
-Чтобы задать значения по умолчанию для параметров (например, текущую локаль), используйте `URL::defaults`. Проверить, что текущий маршрут соответствует заданному имени, можно через метод `named` у объекта Route (доступен в посредниках).
+Названия могут быть вложенными (`admin.users.index`). Вы можете проверять активный маршрут в шаблонах с помощью `Route::is`
+или директивы Blade `@routeIs`.
 
 ## Группы маршрутов {#route-groups}
 
-Группы позволяют применить общие атрибуты — посредники, пространства имён, префиксы, — ко многим маршрутам, не дублируя их. Атрибуты сливаются: посредники и ограничения объединяются, имена и префиксы добавляются к родительским значениям.
+### Промежуточное ПО {#route-group-middleware}
 
-### Посредники
-
-Метод `middleware` принимает массив посредников и применяется ко всем маршрутам в группе. Порядок в массиве определяет порядок выполнения:
+Чтобы применить один или несколько посредников ко множеству маршрутов, объедините их в группу:
 
 ```php
-Route::middleware(['first', 'second'])->group(function () {
-    Route::get('/', function () {
-        // выполняет first и second
-    });
-    Route::get('/user/profile', function () {
-        // выполняет first и second
-    });
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy']);
 });
 ```
 
-### Контроллер
+### Префиксы {#route-group-prefixes}
 
-Если все маршруты группы используют один и тот же контроллер, вызовите метод `controller` и перечислите методы контроллера при определении маршрутов:
+Используйте `prefix` и `name` для добавления префикса URI и имени:
 
 ```php
-use App\Http\Controllers\OrderController;
-
-Route::controller(OrderController::class)->group(function () {
-    Route::get('/orders/{id}', 'show');
-    Route::post('/orders', 'store');
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('/users', [AdminUsersController::class, 'index'])->name('users.index');
 });
 ```
 
-### Поддомены
+### Общая конфигурация {#route-group-configuration}
 
-Группы позволяют маршрутизировать поддомены. Метод `domain` принимает шаблон поддомена с параметрами:
+Метод `group` также принимает ключи `controller`, `domain`, `scopeBindings`, `where` и `withoutMiddleware`. Это упрощает
+конфигурацию API и панелей администрирования.
+
+## Маршрутизация контроллеров {#route-model-binding}
+
+### Неявная привязка {#implicit-binding}
+
+Laravel может автоматически извлекать модели по параметрам маршрута. Если маршрут содержит `{user}` и контроллер ожидает
+`App\Models\User`, Laravel выполнит запрос к базе данных и передаст модель в действие контроллера. По умолчанию поиск выполняется
+по первичному ключу (`id`). Вы можете переопределить ключ с помощью метода `getRouteKeyName()` на модели.
+
+Для вложенных отношений используйте функцию `scopeBindings()` или метод `->scopeBindings()` в группе маршрутов, чтобы убедиться,
+что дочерняя модель принадлежит родительской.
+
+### Неявная привязка по перечислениям {#enum-binding}
+
+Параметры можно типизировать enum-классами. Laravel преобразует значение URI в соответствующий элемент перечисления:
 
 ```php
-Route::domain('{account}.example.com')->group(function () {
-    Route::get('/user/{id}', function (string $account, string $id) {
-        // ...
-    });
+Route::get('/reports/{status}', function (ReportStatus $status) {
+    // ...
 });
 ```
 
-Зарегистрируйте поддоменные маршруты раньше маршрутов для корневого домена, чтобы избежать конфликтов.
+### Явная привязка {#explicit-binding}
 
-### Префиксы
-
-Метод `prefix` добавляет префикс к URI всех маршрутов группы. Например, все URI будут начинаться с `admin`:
-
-```php
-Route::prefix('admin')->group(function () {
-    Route::get('/users', function () {
-        // соответствует URI /admin/users
-    });
-});
-```
-
-### Префиксы имён
-
-Метод `name` позволяет добавить префикс к именам маршрутов. Например, все имена будут начинаться с `admin.`:
-
-```php
-Route::name('admin.')->group(function () {
-    Route::get('/users', function () {
-        // имя admin.users
-    })->name('users');
-});
-```
-
-## Привязка моделей к маршрутам {#route-model-binding}
-
-Привязка моделей позволяет автоматически извлекать экземпляры Eloquent из базы данных, основываясь на значении параметра URI. Вместо того чтобы передавать идентификатор, вы можете передать саму модель.
-
-### Неявная привязка
-
-Если имя переменной в сигнатуре маршрута совпадает с названием параметра URI, Laravel автоматически найдёт и передаст модель. Если модель не найдена, будет возвращён ответ 404. Привязка также работает в методах контроллеров:
+В `RouteServiceProvider` вы можете явно указать, как разрешать параметры:
 
 ```php
 use App\Models\User;
 
-Route::get('/users/{user}', function (User $user) {
-    return $user->email;
-});
-
-// В контроллере
-public function show(User $user)
-{
-    return view('user.profile', ['user' => $user]);
-}
-```
-
-Чтобы разрешить выборку мягко удалённых моделей (soft deleted), добавьте метод `withTrashed()` к маршруту.
-
-### Настройка ключа
-
-По умолчанию модели извлекаются по колонке `id`. Чтобы использовать другую колонку, укажите её через двоеточие в определении параметра или переопределите метод `getRouteKeyName()` в модели:
-
-```php
-Route::get('/posts/{post:slug}', function (Post $post) {
-    return $post;
-});
-
-// В модели Post
-public function getRouteKeyName(): string
-{
-    return 'slug';
-}
-```
-
-### Пользовательские ключи и скопинг
-
-Когда вы привязываете несколько моделей в одном маршруте, Laravel может автоматически ограничивать выборку дочерней модели (post) родительской моделью (user). Для этого используйте метод `scopeBindings()` или `withoutScopedBindings()` для явного включения/отключения такого поведения.
-
-### Пользовательская обработка «не найдено»
-
-Если модель не найдена, Laravel возвращает 404. Чтобы переопределить поведение, используйте метод `missing`, передав обработчик, выполняемый при отсутствии модели.
-
-### Неявная привязка перечислений (Enum)
-
-Laravel поддерживает привязку строковых перечислений PHP 8.1. Если тип‑подсказка параметра маршрута — Enum, маршрут выполнится только при совпадении со значением перечисления; иначе будет возвращён ответ 404.
-
-### Явная привязка
-
-Можно явно указать, как параметр URI сопоставляется с моделью, используя метод `Route::model` в методе `boot` провайдера приложения. Для тонкой настройки логики разрешения воспользуйтесь методом `Route::bind` или переопределите метод `resolveRouteBinding` в модели.
-
-## Резервный маршрут (fallback) {#fallback-routes}
-
-Метод `Route::fallback` определяет маршрут, который будет исполнен, если ни один другой маршрут не подошёл. Обычно необработанные запросы обрабатываются исключением и возвращают страницу 404, но `fallback`‑маршрут позволяет применить собственную логику или назначить специфические посредники.
-
-## Ограничение скорости (rate limiting) {#rate-limiting}
-
-Laravel предоставляет гибкие средства для ограничения количества запросов. Определите лимитаторы в методе `boot` вашего `App\Providers\AppServiceProvider`, используя фасад `RateLimiter` и класс `Limit`. Например, ограничить API до 60 запросов в минуту:
-
-```php
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
-
-protected function boot(): void
-{
-    RateLimiter::for('api', function (Request $request) {
-        return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
-    });
-}
-```
-
-Можно определить разные лимиты (например, глобальный лимит 1000 запросов в минуту) или возвращать собственный ответ при превышении лимита с помощью метода `response`. Лимиты также могут быть сегментированы по значению: например, 10 запросов в минуту на IP и 100 запросов в минуту на пользователя. Для назначения нескольких лимитов верните массив `Limit` в колбэке. Поскольку `by` принимает ключ сегмента, избегайте дублирования префиксом (например, `minute:{id}`, `day:{id}`).
-
-Назначьте лимитатор маршрутам, указав его имя в посреднике `throttle`:
-
-```php
-Route::middleware(['throttle:uploads'])->group(function () {
-    Route::post('/audio', ...);
-    Route::post('/video', ...);
+Route::bind('username', function (string $value) {
+    return User::where('username', $value)->firstOrFail();
 });
 ```
 
-При использовании Redis для кеширования можно заменить стандартный класс `ThrottleRequests` на `ThrottleRequestsWithRedis` с помощью метода `throttleWithRedis` в файле `bootstrap/app.php`.
+## Fallback и перенаправления {#fallback-routes}
 
-## Подмена HTTP‑методов в формах {#form-method-spoofing}
+Используйте `Route::fallback()` для обработки неизвестных маршрутов. Этот маршрут должен быть определён последним, так как
+он срабатывает, когда ни один из других маршрутов не подошёл.
 
-HTML‑формы поддерживают только методы `GET` и `POST`. Чтобы отправить запрос `PUT`, `PATCH` или `DELETE`, добавьте скрытое поле `_method` со значением нужного метода или используйте директиву `@method` в Blade:
+## API и автоматическое оглавление {#api-routes}
 
-```html
-<form action="/example" method="POST">
-    <input type="hidden" name="_method" value="PUT">
-    <input type="hidden" name="_token" value="{{ csrf_token() }}">
-</form>
+Файл `routes/api.php` загружает маршруты в группу `api`, добавляя префикс `api` и посредник `api`. Эти маршруты stateless и
+не используют сессии. При необходимости переопределите конфигурацию в `bootstrap/app.php` через `withRouting`.
 
-<form action="/example" method="POST">
-    @method('PUT')
-    @csrf
-</form>
-```
+Laravel также предоставляет команду `php artisan route:show` для вывода подробной информации о маршруте.
 
-## Доступ к текущему маршруту {#accessing-current-route}
+## Кэширование маршрутов {#route-caching}
 
-Фасад `Route` предоставляет методы `current`, `currentRouteName` и `currentRouteAction` для получения информации о текущем маршруте. Например:
-
-```php
-$route = Route::current();              // объект Illuminate\Routing\Route
-$name  = Route::currentRouteName();     // имя маршрута
-$action= Route::currentRouteAction();   // строка с классом и методом
-```
-
-## CORS (Cross‑Origin Resource Sharing) {#cors}
-
-Laravel автоматически отвечает на CORS‑запросы `OPTIONS` с помощью посредника `HandleCors`. Настройки CORS хранятся в конфигурации, и вы можете опубликовать файл `config/cors.php`, выполнив команду `php artisan config:publish cors`.
-
-## Кеширование маршрутов {#route-caching}
-
-В продакшене рекомендуется кэшировать маршруты для ускорения загрузки приложения. Сгенерируйте кэш с помощью команды `php artisan route:cache`. После добавления или изменения маршрутов необходимо заново сформировать кеш. Для удаления кеша выполните `php artisan route:clear`.
+На продуктивных серверах используйте `php artisan route:cache` для генерации оптимизированного файла маршрутов. Это особенно
+полезно для приложений с большим числом маршрутов и контроллеров. Для сброса кэша выполните `php artisan route:clear`.
