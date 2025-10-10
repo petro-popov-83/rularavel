@@ -1,104 +1,66 @@
 # Защита от CSRF {#csrf-protection}
 
 - [Введение](#introduction)
-- [Предотвращение CSRF‑атак](#preventing-csrf-requests)
-  - [Исключение URI](#excluding-uris)
-- [Заголовок X‑CSRF‑Token](#x-csrf-token)
-- [Заголовок X‑XSRF‑Token](#x-xsrf-token)
+- [Как работает CSRF-защита](#csrf-introduction)
+- [Встроенный middleware](#csrf-middleware)
+- [Исключения из проверки](#csrf-excluding-uris)
+- [CSRF-токен в формах](#csrf-in-forms)
+- [AJAX-запросы и SPA](#csrf-ajax)
+- [Проверка в тестах](#csrf-testing)
 
 ## Введение {#introduction}
 
-Cross‑site request forgery (CSRF) — это атака, при которой злоумышленник заставляет
-аутентифицированного пользователя выполнить нежелательный запрос. Например, если в
-приложении есть маршрут `/user/email` для изменения адреса электронной почты
-через POST‑запрос, злоумышленник может разместить на своём сайте форму,
-отправляющую запрос с новым адресом. Как только пользователь перейдёт на этот
-сайт, его адрес в вашем приложении будет изменён. Чтобы защититься, необходимо
-проверять каждую входящую форму, которая использует методы `POST`, `PUT`,
-`PATCH` или `DELETE`, на наличие секретного токена, которым злоумышленник не
-может завладеть.
+Laravel защищает веб-приложения от подделки межсайтовых запросов (CSRF). Каждый запрос, изменяющий состояние, должен
+включать уникальный токен, связанный с текущей сессией пользователя.
 
-## Предотвращение CSRF‑атак {#preventing-csrf-requests}
+## Как работает CSRF-защита {#csrf-introduction}
 
-Laravel автоматически генерирует CSRF‑токен для каждой активной сессии. Токен
-хранится в сессии и используется для проверки того, что запрос исходит от
-аутентифицированного пользователя. Получить текущий токен можно через объект
-запроса или хелпер `csrf_token()`:
+При загрузке страницы Laravel генерирует токен и сохраняет его в сессии. Когда пользователь отправляет форму, токен передаётся
+вместе с запросом и сверяется middleware `VerifyCsrfToken`. Если токен отсутствует или неверен, выбрасывается исключение
+`TokenMismatchException`.
+
+## Встроенный middleware {#csrf-middleware}
+
+Middleware `VerifyCsrfToken` зарегистрирован в группе `web`. Он автоматически применяет защиту ко всем POST, PUT, PATCH,
+DELETE-запросам. API-маршруты, определённые в `routes/api.php`, не используют сессии и, следовательно, не требуют CSRF.
+
+## Исключения из проверки {#csrf-excluding-uris}
+
+Иногда необходимо отключить проверку токена для определённых URL, например, для вебхуков. Добавьте URI в свойство `$except`
+класса `App\Http\Middleware\VerifyCsrfToken`:
 
 ```php
-use Illuminate\Http\Request;
-
-Route::get('/token', function (Request $request) {
-    // Токен из сессии
-    $token = $request->session()->token();
-
-    // Токен через вспомогательную функцию
-    $token = csrf_token();
-
-    // ...
-});
+protected $except = [
+    'stripe/webhook',
+];
 ```
 
-При создании HTML‑форм с методами `POST`, `PUT`, `PATCH` или `DELETE`
-необходимо включать скрытое поле `_token`, чтобы посредник
-`ValidateCsrfToken` мог проверить запрос. В Blade существует директива
-`@csrf`, которая автоматически генерирует это поле:
+## CSRF-токен в формах {#csrf-in-forms}
 
-```html
+Используйте директиву Blade `@csrf` или хелпер `csrf_field()` внутри HTML-форм:
+
+```blade
 <form method="POST" action="/profile">
     @csrf
-
-    <!-- Эквивалентно... -->
-    <input type="hidden" name="_token" value="{{ csrf_token() }}">
+    <!-- поля -->
 </form>
 ```
 
-### Исключение URI {#excluding-uris}
+Для форм, отправляемых методом PUT, PATCH или DELETE, добавьте `@method('PUT')`.
 
-Иногда нужно исключить определённые маршруты из проверки CSRF. Например,
-если приложение обрабатывает веб‑хуки стороннего сервиса вроде Stripe,
-этот сервис не знает о вашем CSRF‑токене. Обычно такие маршруты помещают
-вне группы `web` в `routes/web.php`. Кроме того, можно передать
-исключения в метод `validateCsrfTokens` при настройке посредников в
-`bootstrap/app.php`:
+## AJAX-запросы и SPA {#csrf-ajax}
 
-```php
-->withMiddleware(function (Middleware $middleware) {
-    $middleware->validateCsrfTokens(except: [
-        'stripe/*',
-        'http://example.com/foo/bar',
-        'http://example.com/foo/*',
-    ]);
-})
-```
+При работе с Axios или другими библиотеками отправляйте токен в заголовке `X-CSRF-TOKEN`. В шаблонах используйте мета-тег:
 
-В режиме тестирования посредник CSRF автоматически отключается.
-
-## Заголовок X‑CSRF‑Token {#x-csrf-token}
-
-Помимо параметра `_token` посредник `ValidateCsrfToken` проверяет
-заголовок `X‑CSRF‑TOKEN`. Токен можно добавить в HTML в виде meta‑тега и
-затем автоматически вставлять его в заголовки AJAX‑запросов через
-библиотеку, например jQuery:
-
-```html
+```blade
 <meta name="csrf-token" content="{{ csrf_token() }}">
-
-<script>
-$.ajaxSetup({
-    headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-    }
-});
-</script>
 ```
 
-## Заголовок X‑XSRF‑Token {#x-xsrf-token}
+В `resources/js/bootstrap.js` Laravel по умолчанию считывает мета-тег и добавляет заголовок ко всем запросам Axios. Если вы
+пишете SPA на Inertia или Livewire, токены обрабатываются автоматически.
 
-Laravel также помещает текущий CSRF‑токен в зашифрованную cookie
-`XSRF-TOKEN`, которая отправляется вместе с каждым ответом. Значение этой
-cookie можно использовать для установки заголовка `X‑XSRF‑TOKEN`. Некоторые
-JavaScript‑фреймворки (Angular, Axios) автоматически читают эту cookie и
-устанавливают заголовок на запросах того же домена. По умолчанию файл
-`resources/js/bootstrap.js` уже подключает Axios, поэтому этот заголовок
-будет отправляться автоматически.
+## Проверка в тестах {#csrf-testing}
+
+Методы HTTP-хелперов тестирования (`post`, `put`, `delete`) автоматически добавляют корректный токен, поэтому дополнительная
+настройка не требуется. Если вы отключаете middleware в тестах, можете использовать `withoutMiddleware(VerifyCsrfToken::class)`
+или передавать `['_token' => csrf_token()]` вручную.

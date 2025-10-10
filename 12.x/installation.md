@@ -1,197 +1,230 @@
-# Установка
+# Установка {#installation}
 
 - [Знакомство с Laravel](#meet-laravel)
   - [Почему Laravel?](#why-laravel)
 - [Создание приложения Laravel](#creating-a-laravel-project)
-  - [Установка PHP и Laravel Installer](#installing-php)
-  - [Создание приложения](#creating-an-application)
-- [Начальная настройка](#initial-configuration)
-  - [Конфигурация на основе окружения](#environment-based-configuration)
+  - [Установка PHP и Composer](#installing-php)
+  - [Использование Laravel Installer](#laravel-installer)
+  - [Создание через Composer](#via-composer)
+  - [Создание через GitHub Codespaces](#codespaces)
+- [Начальная конфигурация](#initial-configuration)
+  - [Переменные окружения](#environment-based-configuration)
+  - [Конфигурация приложения](#application-configuration)
   - [Базы данных и миграции](#databases-and-migrations)
-  - [Конфигурация каталога](#directory-configuration)
-- [Установка с помощью Herd](#installation-using-herd)
-  - [Herd на macOS](#herd-on-macos)
-  - [Herd на Windows](#herd-on-windows)
-- [Поддержка IDE](#ide-support)
+- [Локальная среда разработки](#local-development-environments)
+  - [Laravel Herd](#laravel-herd)
+  - [Laravel Sail](#laravel-sail)
+  - [Сторонние решения](#other-local-environments)
+- [Поддержка IDE и инструменты](#ide-support)
 - [Laravel и ИИ](#laravel-and-ai)
-  - [Установка Laravel Boost](#installing-laravel-boost)
 - [Следующие шаги](#next-steps)
-  - [Laravel как full‑stack фреймворк](#laravel-the-fullstack-framework)
-  - [Laravel как API бекенд](#laravel-the-api-backend)
+  - [Laravel как full-stack фреймворк](#laravel-the-fullstack-framework)
+  - [Laravel как API-бекенд](#laravel-the-api-backend)
 
 ## Знакомство с Laravel {#meet-laravel}
 
-Laravel — это веб‑фреймворк с выразительным и элегантным синтаксисом. Фреймворк предоставляет структуру и отправную точку для создания вашего приложения, позволяя сосредоточиться на создании чего‑то удивительного, пока мы берём на себя заботу о деталях.
+Laravel — это современный веб-фреймворк с выразительным, элегантным синтаксисом. Он предоставляет структуру и стартовую
+точку для разработки вашего приложения, позволяя сосредоточиться на создании продукта, пока инфраструктура и типовые
+задачи берёт на себя сам фреймворк.
 
-Laravel стремится обеспечить потрясающий опыт разработчика, одновременно предлагая мощные функции, такие как внедрение зависимостей, выразительный слой абстракции базы данных, очереди и запланированные задания, модульные и интеграционные тесты и многое другое.
+Мы стремимся сделать работу с Laravel приятной и продуктивной. Фреймворк включает мощные возможности вроде внедрения
+зависимостей, выразительного ORM, очередей и задач по расписанию, средств для модульного и интеграционного тестирования,
+широкого набора вспомогательных функций и инструментов командной строки.
 
-Независимо от того, новичок ли вы в мире PHP‑фреймворков или имеете многолетний опыт, Laravel — это фреймворк, который может развиваться вместе с вами. Мы поможем сделать первые шаги как веб‑разработчик или дадим толчок, когда вы будете готовы подняться на следующий уровень. Мы не можем дождаться, чтобы увидеть, что вы создадите.
+Laravel одинаково подходит как новичкам, делающим первые шаги в веб-разработке, так и опытным инженерам. Богатая
+документация, Laracasts, конференции и активное сообщество помогут вам расти вместе с фреймворком, а когда вы будете
+готовы решать задачи уровня предприятия, Laravel предложит инструменты для этого.
 
 ### Почему Laravel? {#why-laravel}
 
-Существует множество инструментов и фреймворков для создания веб‑приложений. Тем не менее, мы считаем, что Laravel — лучший выбор для создания современных full‑stack веб‑приложений.
-
 #### Прогрессивный фреймворк
 
-Мы любим называть Laravel «прогрессивным» фреймворком. Это означает, что Laravel растёт вместе с вами. Если вы только делаете первые шаги в веб‑разработке, обширная библиотека документации, руководств и видеоуроков ( например, на [Laracasts](https://laracasts.com) ) поможет вам освоиться без перегрузки.
-
-Если вы опытный разработчик, Laravel предоставляет мощные инструменты для внедрения зависимостей, модульного тестирования, работы с очередями, обработки событий в реальном времени и многого другого. Laravel прекрасно настроен для создания профессиональных веб‑приложений и готов справляться с нагрузками уровня предприятия.
+Laravel развивается вместе с вами. Стартуйте с базовых руководств, расширяйте знания за счёт пакетов и сервисов экосистемы,
+используйте встроенную автоматизацию. Когда возникнет потребность в большем контроле, вы сможете «опуститься на уровень
+ниже» и переопределить практически любую часть инфраструктуры.
 
 #### Масштабируемый фреймворк
 
-Laravel невероятно масштабируем. Благодаря масштабируемой природе PHP и встроенной поддержке быстрых распределённых систем кеширования, таких как Redis, горизонтальное масштабирование с Laravel — это простая задача.
+Благодаря природе PHP и поддержке распределённых систем кеширования (Redis, DynamoDB и др.) горизонтальное масштабирование
+Laravel-проектов — понятная задача. Для критичных нагрузок доступны такие сервисы, как [Laravel Cloud](https://cloud.laravel.com)
+и [Vapor](https://vapor.laravel.com), которые автоматически управляют инфраструктурой в облаке AWS.
 
-Нужна экстремальная масштабируемость? Платформы, такие как [Laravel Cloud](https://cloud.laravel.com), позволяют запускать ваше Laravel‑приложение практически без ограничений по масштабу.
+#### Сообщество и экосистема
 
-#### Сообщество разработчиков
+Laravel объединяет лучшие библиотеки PHP-мира: Symfony-компоненты, популярные пакеты сообщества, инструменты для DevOps.
+Тысячи разработчиков создают модули, пакеты и обучающие материалы. Стандартные пакеты Laravel, такие как Horizon, Telescope,
+Scout, Cashier, Breeze, Jetstream и другие, закрывают частые бизнес-задачи из коробки.
 
-Laravel объединяет лучшие пакеты PHP‑экосистемы, предлагая надёжный и удобный для разработчиков фреймворк. Тысячи талантливых разработчиков со всего мира внесли свой вклад в Laravel, и, возможно, вы станете одним из них.
+## Создание приложения Laravel {#creating-a-laravel-project}
 
-### Создание приложения Laravel {#creating-a-laravel-project}
+### Установка PHP и Composer {#installing-php}
 
-#### Установка PHP и Laravel Installer {#installing-php}
+Для работы с Laravel требуется PHP версии 8.2 или выше, расширения `ctype`, `curl`, `dom`, `fileinfo`, `json`, `mbstring`,
+`openssl`, `pdo`, `tokenizer`, `xml`. Также необходим менеджер зависимостей [Composer](https://getcomposer.org) и Node.js или
+Bun для компиляции ресурсов фронтенда.
 
-Прежде чем создавать приложение Laravel, убедитесь, что на вашей системе установлен PHP не ниже версии 8.2 и менеджер зависимостей [Composer](https://getcomposer.org). Вам также понадобится Node.js или Bun для компиляции ресурсов фронтенда.  
+- **macOS.** Установите [Homebrew](https://brew.sh), затем выполните:
 
-Если вы используете macOS, вы можете установить PHP и Composer с помощью менеджера пакетов Homebrew:
+  ```bash
+  brew update
+  brew install php composer
+  ```
 
-```bash
-brew update
-brew install php composer
-```
+- **Windows.** Самый простой путь — установить [Laravel Herd](https://herd.laravel.com) или официальные сборки PHP с сайта
+  [windows.php.net](https://windows.php.net/download/). Herd включает PHP, Nginx и менеджер проектов, а также позволяет
+  переключать версии PHP.
 
-На Windows рекомендуется установить [Laravel Herd](https://herd.laravel.com) или официальный установщик PHP из [windows.php.net/download](https://windows.php.net/download/). В Linux распространенные дистрибутивы предлагают PHP и Composer через менеджеры пакетов, например:
+- **Linux.** Используйте менеджер пакетов вашего дистрибутива. Например, в Ubuntu:
 
-```bash
-sudo apt update
-sudo apt install php-cli php-common php-mbstring php-xml composer unzip
-```
+  ```bash
+  sudo apt update
+  sudo apt install php-cli php-fpm php-mbstring php-xml php-zip php-curl composer unzip
+  ```
 
-После установки Composer вы можете глобально установить Laravel Installer, который позволит быстро создавать новые приложения:
+### Использование Laravel Installer {#laravel-installer}
+
+Laravel предоставляет глобальный установщик, который ускоряет создание проектов и автоматически генерирует ключ приложения:
 
 ```bash
 composer global require laravel/installer
 ```
 
-Эта команда скачает исполняемый файл `laravel`, который станет доступен в PATH после перезапуска терминала. Чтобы обновить Laravel Installer в будущем, просто выполните ту же команду снова.
+После установки убедитесь, что директория `~/.composer/vendor/bin` (или `~/Library/Composer/vendor/bin` на macOS, `%USERPROFILE%\AppData\Roaming\Composer\vendor\bin` на Windows) добавлена в переменную окружения `PATH`.
 
-#### Создание приложения {#creating-an-application}
-
-Чтобы создать новый проект, выполните команду `laravel new` с именем вашего приложения. Например, чтобы создать проект `example-app`, выполните:
+Создайте новое приложение командой:
 
 ```bash
 laravel new example-app
 ```
 
-Эта команда создаст каталог `example-app` и установит все зависимости. После установки перейдите в новый каталог и запустите локальный сервер разработки:
+Installer предложит выбрать стек фронтенда, набор аутентификации и запуск миграций. Если вы хотите использовать Git с первого
+дня, добавьте флаг `--git`. Для быстрого старта без Node.js используйте `--no-interaction --no-breeze`.
+
+### Создание через Composer {#via-composer}
+
+Если вы не хотите устанавливать Laravel Installer, создайте проект напрямую через Composer:
+
+```bash
+composer create-project laravel/laravel example-app
+```
+
+Команда скачает актуальный шаблон приложения, установит зависимости и выполнит базовую настройку. Далее перейдите в каталог
+проекта и запустите локальный сервер разработки:
 
 ```bash
 cd example-app
 php artisan serve
 ```
 
-Сервер запустится на <http://localhost:8000>, и вы увидите приветственную страницу Laravel.  
+Сервер будет доступен по адресу <http://localhost:8000>.
 
-Если ваше приложение использует фронтенд — CSS и JavaScript, установите зависимости Node и скомпилируйте ресурсы:
+### Создание через GitHub Codespaces {#codespaces}
 
-```bash
-npm install && npm run dev
-```
+Официальный репозиторий Laravel содержит готовый шаблон [GitHub Codespaces](https://github.com/codespaces), позволяющий
+запустить Laravel в облачной среде разработки. Нажмите **Use this template → Open in Codespaces**, дождитесь инициализации и
+следуйте подсказкам: приложение автоматически поднимется с помощью Laravel Sail.
 
-По умолчанию Laravel поставляется без аутентификации. Чтобы быстро добавить готовый UI для входа, регистрации и т.п., используйте один из стартовых наборов, например [Laravel Breeze](https://laravel.com/docs/starter-kits#laravel-breeze) или [Jetstream](https://jetstream.laravel.com).
+## Начальная конфигурация {#initial-configuration}
 
-### Начальная настройка {#initial-configuration}
+### Переменные окружения {#environment-based-configuration}
 
-После создания приложения вы можете настроить некоторые параметры, которые влияют на поведение фреймворка. Все основные параметры расположены в каталоге `config`. Например, в файле `config/app.php` вы можете указать значение `url`, которое будет использоваться при генерации ссылок, а также установить `locale` — язык по умолчанию.
+В корне проекта находится файл `.env`, содержащий конфиденциальные настройки: ключ приложения, параметры базы данных,
+провайдеры очередей, сервисы электронной почты и т. д. Этот файл не должен попадать под контроль версий. Для каждого окружения
+создавайте собственный `.env` (например, `.env.local`, `.env.staging`). При развертывании используйте инструмент `php artisan
+config:cache`, который собирает конфигурацию в единый файл.
 
-#### Конфигурация на основе окружения {#environment-based-configuration}
+### Конфигурация приложения {#application-configuration}
 
-В корне каждого проекта Laravel находится файл `.env`, который содержит переменные окружения для вашей локальной среды. Этот файл не должен попадать в систему контроля версий, так как он может содержать конфиденциальные данные, такие как ключ приложения и пароли.  
+Каталог `config` содержит файлы с настройками фреймворка и пакетов. Проверьте и настройте следующие параметры:
 
-Переменные из `.env` автоматически загружаются при запуске приложения. Для разных окружений (local, staging, production) вы можете создавать свои копии файла `.env` с соответствующими значениями. Подробнее о конфигурации читайте в разделе [Конфигурация](https://laravel.com/docs/configuration).
+- `config/app.php`: имя приложения (`name`), URL (`url`), часовой пояс (`timezone`), язык (`locale`).
+- `config/database.php`: драйвер по умолчанию, параметры подключения.
+- `config/cache.php`, `config/session.php`, `config/queue.php`: драйверы кеша, сессий и очередей.
 
-#### Базы данных и миграции {#databases-and-migrations}
+Для неизменяемых значений используйте конфигурационные файлы, а не `.env`. Значения из `.env` подгружаются только до вызова
+`config:cache`, поэтому не обращайтесь к функции `env()` в коде приложения.
 
-По умолчанию Laravel настроен для использования SQLite, что упрощает запуск локальных приложений. Чтобы использовать SQLite, просто создайте пустой файл базы данных:
+### Базы данных и миграции {#databases-and-migrations}
+
+По умолчанию приложение настроено на SQLite. Достаточно создать файл базы данных и запустить миграции:
 
 ```bash
 touch database/database.sqlite
-```
-
-Если вы хотите использовать MySQL, PostgreSQL или другую СУБД, настройте соответствующие параметры `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` и `DB_PASSWORD` в файле `.env`. Например, для MySQL:
-
-```
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=laravel
-DB_USERNAME=root
-DB_PASSWORD=
-```
-
-После конфигурации вы можете создать таблицы, выполнив миграции:
-
-```bash
 php artisan migrate
 ```
 
-Для локальной работы с серверами баз данных вы можете использовать инструменты, такие как Herd Pro или DBngin, которые позволяют запускать MySQL, PostgreSQL и Redis локально.
+Для подключения к MySQL, PostgreSQL, SQL Server или другой СУБД укажите параметры `DB_CONNECTION`, `DB_HOST`, `DB_PORT`,
+`DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` в `.env`. Воспользуйтесь командами `php artisan migrate`, `migrate:fresh`,
+`db:seed` и `migrate --seed` для управления схемой и начальными данными.
 
-#### Конфигурация каталога {#directory-configuration}
+## Локальная среда разработки {#local-development-environments}
 
-Убедитесь, что ваш веб‑сервер настроен на обслуживание проекта из корневой директории Laravel (папка `public`). Не размещайте Laravel-приложение в подкаталогах, так как это может привести к проблемам с маршрутизацией.
+### Laravel Herd {#laravel-herd}
 
-### Установка с помощью Herd {#installation-using-herd}
+[Laravel Herd](https://herd.laravel.com) — официальный нативный стек для macOS и Windows. Herd включает несколько версий PHP,
+управление виртуальными хостами `.test`, поддержку Redis, MySQL и почтовых драйверов (в версии Herd Pro). Поместите проект в
+каталог, который отслеживает Herd, и приложение автоматически станет доступно по адресу `https://имя-проекта.test`.
 
-[Lara­el­vel Herd](https://herd.laravel.com) — это официальный пакет для macOS и Windows, который включает в себя готовые сборки PHP и Nginx, а также удобные инструменты командной строки. Herd позволяет запускать несколько версий PHP, управлять проектами и системами баз данных (в Herd Pro).  
-
-#### Herd на macOS {#herd-on-macos}
-
-Скачайте Herd для macOS с сайта [herd.laravel.com](https://herd.laravel.com) и следуйте инструкциям по установке. Herd автоматически настроит `dnsmasq`, чтобы приложения из каталога `~/Herd` были доступны по домену `.test`. Например, проект в `~/Herd/my-app` будет доступен по адресу <http://my-app.test>.  
-
-Вы также можете создать приложение с помощью Herd CLI:
+CLI Herd позволяет создавать проекты:
 
 ```bash
 herd new example-app
+herd link
 ```
 
-#### Herd на Windows {#herd-on-windows}
+### Laravel Sail {#laravel-sail}
 
-Версия Herd для Windows распространяется через официальный установщик. После установки Herd создаст директорию `C:\\Herd`, где будут размещаться ваши проекты. Как и на macOS, проекты доступны по домену `.test`. Чтобы создать новое приложение, используйте:
+[Sail](https://laravel.com/docs/sail) — облегчённая среда разработки на Docker. Sail поставляется по умолчанию в каждом
+приложении и управляется скриптом `./vendor/bin/sail`.
 
 ```bash
-herd new example-app
+./vendor/bin/sail up
 ```
 
-Herd на Windows включает готовый PHP, Nginx и предоставляет панель управления для изменения версий PHP и управления службами.
+Sail использует Docker Compose и обеспечивает сервисы MySQL, Redis, Meilisearch, MinIO, Mailpit. Вы можете настроить состав
+служб в файле `docker-compose.yml` и переопределить переменные среды в `.env`.
 
-### Поддержка IDE {#ide-support}
+### Сторонние решения {#other-local-environments}
 
-Laravel имеет расширения для популярных IDE и редакторов кода. Для Visual Studio Code существует расширение [Laravel Idea](https://plugins.jetbrains.com/plugin/13441-laravel-idea) (также доступно для JetBrains IDE), которое предоставляет автодополнение, генерацию кода и навигацию по проекту. Установка расширений значительно ускоряет разработку.
+Любая LEMP-/LAMP-среда, отвечающая требованиям к версиям PHP и расширениям, подходит для запуска Laravel. Популярные решения:
 
-### Laravel и ИИ {#laravel-and-ai}
+- [Laravel Valet](https://laravel.com/docs/valet) для macOS.
+- [Homestead](https://laravel.com/docs/homestead) — виртуальная машина Vagrant с полной конфигурацией.
+- Lando, DDEV, WSL2 + Nginx или Apache.
 
-Сообщество Laravel развивается в направлении использования искусственного интеллекта. Пакет [Laravel Boost](https://laravel.com/docs/laravel-boost) позволяет легко интегрировать модели ИИ в ваше приложение, например для генерации текста, изображений или классификации данных.
+При настройке убедитесь, что Document Root указывает на каталог `public` вашего приложения.
 
-#### Установка Laravel Boost {#installing-laravel-boost}
+## Поддержка IDE и инструменты {#ide-support}
 
-Чтобы установить Laravel Boost, выполните команду:
+Расширения для IDE ускоряют разработку: Larastan и PHPStan обеспечивают статический анализ, Laravel Pint — автоматическое
+форматирование, Laravel Telescope — отладку запросов. Для PHPStorm и JetBrains существует плагин [Laravel Idea](https://plugins.jetbrains.com/plugin/13441-laravel-idea), для VS Code — расширения Laravel Artisan, Blade Snippets и Laravel Extra Intellisense.
+
+## Laravel и ИИ {#laravel-and-ai}
+
+Laravel активно интегрируется с инструментами искусственного интеллекта. Используйте [Laravel Pennant](https://laravel.com/docs/pennant)
+для feature-флагов и A/B-тестов, [Laravel Prompt](https://laravel.com/docs/prompt) для работы с LLM в консоли и [Laravel Boost](https://laravel.com/docs/laravel-boost)
+для упрощённого доступа к облачным моделям. Установка Boost выполняется командой:
 
 ```bash
 composer require laravel/boost
 ```
 
-Затем опубликуйте конфигурационный файл и следуйте документации пакета, чтобы настроить доступ к провайдерам ИИ.
+После установки опубликуйте конфигурацию (`php artisan vendor:publish --tag=boost-config`) и настройте ключи API провайдеров.
 
-### Следующие шаги {#next-steps}
+## Следующие шаги {#next-steps}
 
-После установки и первоначальной настройки вы можете выбрать направление развития вашего приложения.
+### Laravel как full-stack фреймворк {#laravel-the-fullstack-framework}
 
-#### Laravel как full‑stack фреймворк {#laravel-the-fullstack-framework}
+Изучите разделы [Маршрутизация](./routing.md), [Структура приложения](./structure.md), [Шаблоны Blade](./blade-templates.md),
+[ORM Eloquent](https://laravel.com/docs/eloquent) и [Frontend](./frontend.md). Обратите внимание на стартовые наборы [Breeze](https://laravel.com/docs/starter-kits#laravel-breeze)
+и [Jetstream](https://jetstream.laravel.com), которые предоставляют готовые шаблоны аутентификации, профилей и двухфакторной
+проверки.
 
-Laravel предоставляет множество инструментов для построения полноценных веб‑приложений: систему маршрутизации, Eloquent ORM для работы с базой данных, очередь задач, уведомления, систему аутентификации, шаблонизатор Blade и многое другое. Изучите [основы](https://laravel.com/docs/getting-started) и [структуру каталогов](https://laravel.com/docs/structure), чтобы понять, как организован фреймворк.
+### Laravel как API-бекенд {#laravel-the-api-backend}
 
-#### Laravel как API бекенд {#laravel-the-api-backend}
+Для создания REST или GraphQL API используйте [маршруты API](./routing.md#api-routes), ресурсы [Eloquent](https://laravel.com/docs/eloquent) и
+пакеты [Laravel Sanctum](https://laravel.com/docs/sanctum) или [Passport](https://laravel.com/docs/passport) для аутентификации.
+Документация также покрывает построение WebSocket-решений на базе [Laravel Reverb](https://laravel.com/docs/reverb) и очередей
+для фоновых задач.
 
-Если вам нужен только API‑бекенд, Laravel также отлично подходит для этих задач. Вы можете использовать [Маршруты API](https://laravel.com/docs/routing#api-routes), Eloquent для работы с данными и такие пакеты, как [Laravel Sanctum](https://laravel.com/docs/sanctum) или [Laravel Passport](https://laravel.com/docs/passport) для аутентификации по токенам. Для фронтенд‑части вы можете использовать любой фреймворк JavaScript (React, Vue, Angular) или мобильные приложения.
-
+Готово! Теперь вы можете продолжить изучение Laravel и построение собственного приложения.

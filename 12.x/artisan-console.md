@@ -1,138 +1,143 @@
 # Консоль Artisan {#artisan-console}
 
+- [Введение](#introduction)
+- [Запуск команд](#running-commands)
+  - [Глобальные опции](#global-options)
+  - [Псевдонимы](#command-aliases)
+- [Создание команд](#writing-commands)
+  - [Структура команды](#command-structure)
+  - [Аргументы и параметры](#command-arguments)
+  - [Валидация ввода](#command-input-validation)
+  - [Вопросы и подтверждения](#command-interaction)
+  - [Прогресс-бары и вывод](#progress-bar)
+  - [Фоновые задачи](#background-tasks)
+- [Планировщик задач](#task-scheduling)
+- [Тестирование команд](#testing-commands)
+
 ## Введение {#introduction}
 
-Artisan — это интерфейс командной строки, входящий в состав Laravel. Скрипт `artisan` находится в корне вашего приложения и предоставляет множество команд, полезных при разработке. Чтобы увидеть список доступных команд, выполните:
+Artisan — мощный интерфейс командной строки Laravel. Он предоставляет команды для разработки, тестирования, деплоя и
+обслуживания приложения. Все команды зарегистрированы в `app/Console/Kernel.php` и доступны через `php artisan`.
+
+## Запуск команд {#running-commands}
+
+Выполните `php artisan list`, чтобы просмотреть все команды. Для получения справки используйте `php artisan help <команда>`.
+Команды поддерживают короткую и длинную форму опций, а также передачу аргументов:
 
 ```bash
-php artisan list
+php artisan make:model Post --migration
+php artisan migrate --step
 ```
 
-Каждая команда имеет экран справки, где описаны её аргументы и параметры. Чтобы просмотреть справку, укажите ключевое слово `help` перед именем команды:
+### Глобальные опции {#global-options}
+
+- `--env=production` — указать файл окружения.
+- `--ansi` / `--no-ansi` — включить или отключить раскраску вывода.
+- `-q` / `--quiet` — скрыть вывод.
+- `-n` / `--no-interaction` — отключить интерактивные подсказки.
+
+### Псевдонимы {#command-aliases}
+
+Некоторые команды имеют короткие псевдонимы. Например, `php artisan tinker` можно запустить как `php artisan ti`. Вы можете
+определять собственные псевдонимы в `protected $commands` консольного ядра.
+
+## Создание команд {#writing-commands}
+
+Создайте класс команды командой `make:command`:
 
 ```bash
-php artisan help migrate
+php artisan make:command ImportReports
 ```
 
-Если вы используете **Laravel Sail** для локальной разработки, не забудьте использовать команду `sail` для вызова Artisan внутри контейнеров Docker, например `./vendor/bin/sail artisan list`.
+Команда будет создана в `app/Console/Commands`. Вы можете указать пространство имён с поддиректориями. Для одноразового
+выполнения создайте closure-команду в `routes/console.php`.
 
-### Tinker (REPL) {#tinker-repl}
+### Структура команды {#command-structure}
 
-**Laravel Tinker** — это интерактивная среда (REPL) на базе PsySH для работы с вашим приложением. Обычно Tinker устанавливается вместе с Laravel, но его можно добавить отдельно:
-
-```bash
-composer require laravel/tinker
-```
-
-Запустить Tinker можно командой:
-
-```bash
-php artisan tinker
-```
-
-В REPL вы можете взаимодействовать с моделями Eloquent, dispatch‑ить задания, публиковать события и т.д. Файл конфигурации `tinker.php` позволяет ограничивать список доступных команд (`commands`) и классов, для которых не следует автоматически создавать псевдонимы (`dont_alias`).
-
-## Создание собственных команд {#writing-commands}
-
-Laravel позволяет создавать собственные консольные команды. Обычно они хранятся в каталоге `app/Console/Commands`. Чтобы сгенерировать новую команду, используйте команду Artisan:
-
-```bash
-php artisan make:command SendEmails
-```
-
-Этот генератор создаст класс в `app/Console/Commands`. Внутри класса следует определить свойства:
-
-- `signature` — строка, описывающая имя команды, аргументы и опции;
-- `description` — краткое описание команды, отображается в списке команд;
-- `handle()` — метод, содержащий логику команды. Laravel внедрит зависимости в этот метод автоматически.
-
-Пример команды, отправляющей электронные письма:
+Каждая команда определяет свойства `$signature` и `$description` и реализует метод `handle`. Пример:
 
 ```php
-namespace App\Console\Commands;
-
-use App\Models\User;
-use App\Support\DripEmailer;
-use Illuminate\Console\Command;
-
-class SendEmails extends Command
+class ImportReports extends Command
 {
-    protected $signature = 'mail:send {user}';
-    protected $description = 'Send a marketing email to a user';
+    protected $signature = 'reports:import {path : Путь к CSV-файлу} {--queue}';
+    protected $description = 'Импорт аналитических отчётов';
 
-    public function handle(DripEmailer $drip): void
+    public function handle(): int
     {
-        $drip->send(User::find($this->argument('user')));
+        // ...
+        return self::SUCCESS;
     }
 }
 ```
 
-### Возврат кода завершения
+Верните одну из констант `Command::SUCCESS`, `FAILURE` или `INVALID`. Вы можете вызывать другие команды из `handle` с помощью
+`$this->call()` и `$this->callSilent()`.
 
-Если метод `handle` завершается без возвращаемого значения, команда выходит с кодом `0` (успех). Вы можете вернуть целое число, чтобы указать другой код. Метод `$this->fail()` сразу завершит команду с кодом `1`.
+### Аргументы и параметры {#command-arguments}
 
-### Команды на замыканиях
+Определите аргументы и опции в свойстве `$signature`:
 
-Вместо классов можно определить консольные команды в виде замыканий в файле `routes/console.php` с помощью метода `Artisan::command`:
+- `{user}` — обязательный аргумент.
+- `{user?}` — необязательный аргумент.
+- `{user*}` — массив аргументов.
+- `{--queue}` — булева опция.
+- `{--connection=redis}` — опция со значением.
+- `{--timeout=60 : Количество секунд}` — опция со справкой.
 
-```php
-use Illuminate\Support\Facades\Artisan;
+Для более сложной конфигурации используйте свойство `$inputs` или метод `addArgument` в методе `configure()`.
 
-Artisan::command('mail:send {user}', function (string $user) {
-    $this->info("Sending email to: {$user}!");
-})->purpose('Send a marketing email to a user');
-```
+### Валидация ввода {#command-input-validation}
 
-Замыкание привязывается к экземпляру команды, поэтому в нём доступны все методы `$this->info()`, `$this->error()` и т.д. Вы также можете указать дополнительные зависимости в списке параметров замыкания — они будут разрешены из контейнера.
+Используйте метод `validate` фасада `Validator` или встроенные методы для проверки аргументов. Вы можете завершить выполнение
+с ошибкой, вызвав `$this->error()` и вернув `Command::FAILURE`.
 
-### Изолируемые команды
+### Вопросы и подтверждения {#command-interaction}
 
-Чтобы гарантировать, что команда выполняется только в одном экземпляре, реализуйте интерфейс `Illuminate\Contracts\Console\Isolatable`. Laravel автоматически добавит опцию `--isolated`. При запуске с этой опцией будет создан атомарный замок с использованием выбранного драйвера кэширования. Если замок не удаётся получить, команда не будет выполнена. Вы можете задать код возврата при неудаче (`--isolated=12`).
+Методы `ask`, `secret`, `confirm`, `anticipate`, `choice` позволяют взаимодействовать с пользователем. Для автоматизированных
+процессов используйте опцию `--no-interaction`, чтобы избежать вопросов.
 
-## Аргументы и опции {#arguments-and-options}
+### Прогресс-бары и вывод {#progress-bar}
 
-Аргументы и опции задаются прямо в свойстве `signature` или через методы `argument()` и `option()`. В определении команды аргументы заключаются в фигурные скобки, опции — начинаются с `--`. С помощью `*` можно указать, что аргумент или опция принимает несколько значений. Для обязательных аргументов можно предоставить описание через двоеточие:
+Artisan содержит удобные методы для форматирования вывода: `info`, `warn`, `error`, `table`, `components->twoColumnDetail()`.
+Прогресс-бары создаются методом `$this->withProgressBar($items, $callback)` или `$this->output->progressStart()`.
 
-```php
-protected $signature = 'report:generate {year : Year of the report} {--format=pdf : Export format}';
-```
+### Фоновые задачи {#background-tasks}
 
-Для чтения входных данных используйте `$this->argument('year')`, `$this->option('format')`, `$this->arguments()` (возвращает массив всех аргументов) и `$this->options()` (возвращает массив всех опций). Если аргумент отсутствует, можно переопределить метод `promptForMissingArgumentsUsing()` и вернуть набор вопросов, который будет задан пользователю.
+Если выполнение команды занимает много времени, рассмотрите очередь заданий. Внутри команды вы можете диспатчить задания через
+`Bus::dispatch()` или `Process::run()` для запуска внешних процессов.
 
-### Взаимодействие с пользователем {#user-interaction}
+## Планировщик задач {#task-scheduling}
 
-Команды часто требуют ввода от пользователя. Artisan предоставляет множество методов:
-
-- `$this->ask($question, $default = null)` — запрашивает строку;
-- `$this->secret($question)` — запрашивает строку без отображения ввода (например, пароль);
-- `$this->confirm($question, $default = false)` — задаёт вопрос «да/нет» и возвращает булев результат;
-- `$this->choice($question, array $choices, $default = null, $maxAttempts = null, $allowMultipleSelections = false)` — позволяет выбрать из списка вариантов;
-- `$this->anticipate($question, array $choices)` — предлагает варианты автодополнения.
-
-## Вывод информации {#output}
-
-Для вывода текста используйте методы:
-
-- `$this->info($string)` — зелёный цвет для информационных сообщений;
-- `$this->warn($string)` — жёлтый цвет для предупреждений;
-- `$this->error($string)` — красный цвет для ошибок;
-- `$this->line($string, string|null $style = null)` — выводит строку в указанном стиле;
-- `$this->table($headers, $rows)` — выводит данные в виде таблицы.
-
-### Индикаторы прогресса
-
-Если нужно показать ход выполнения продолжительной задачи, используйте `withProgressBar()` или класс `ProgressBar`. Первый метод принимает коллекцию и замыкание, которое будет вызвано для каждого элемента, автоматически обновляя шкалу. Также можно создать прогресс‑бар вручную:
+Планировщик Laravel позволяет описывать расписание команд в методе `schedule` класса `App\Console\Kernel`.
 
 ```php
-$bar = $this->output->createProgressBar(100);
-$bar->start();
-// ... выполняем работу, обновляя бар ...
-$bar->advance();
-$bar->finish();
+protected function schedule(Schedule $schedule): void
+{
+    $schedule->command('reports:import')->dailyAt('02:00');
+    $schedule->call(fn () => Log::info('Heartbeat'))->everyTenMinutes();
+}
 ```
 
-## Прослушивание событий и перезапись шаблонов
+Используйте методы `hourly`, `weeklyOn`, `timezone`, `onOneServer`, `withoutOverlapping`, `runInBackground` и события для
+гибкой настройки. На сервере планировщик запускается одной задачей cron:
 
-Artisan предоставляет события `CommandStarting`, `CommandFinished` и `ArtisanCommandExecuted`, которые можно слушать для выполнения дополнительной логики вокруг команд. При генерации команд вы можете настроить шаблоны (stubs), опубликовав их из пакета и изменив под свои нужды. Это позволяет централизованно контролировать стиль генерируемого кода.
+```cron
+* * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1
+```
 
-Эта глава лишь кратко описывает функциональность Artisan. Более глубокие темы, такие как планировщик команд (Task Scheduling) и очереди, рассмотрены в отдельных разделах.
+## Тестирование команд {#testing-commands}
+
+Laravel предоставляет хелперы для тестирования команд:
+
+```php
+public function test_import_command(): void
+{
+    Queue::fake();
+
+    $this->artisan('reports:import storage/reports.csv')
+        ->expectsOutput('Импорт завершён')
+        ->assertExitCode(Command::SUCCESS);
+}
+```
+
+Методы `expectsQuestion`, `expectsChoice`, `expectsTable` помогают проверять интерактивные команды.
